@@ -51,11 +51,11 @@ export const GUARD = {
   speedRampSeconds: 240,
   acceleration: 22,
   /** Re-acquire radius: a patrolling/searching guard spots the hero inside this (needs line of sight). */
-  sightRange: 8,
+  sightRange: 5,
   /** Give-up radius: a chasing guard keeps tracking until the hero is farther than this (> sightRange). */
-  loseRange: 14,
+  loseRange: 8,
   /** Very close range where guards "hear" the hero even through a wall. */
-  hearRange: 3,
+  hearRange: 2.5,
   alertSeconds: 0.7,
   /** After losing the hero: walk to the last seen spot, look around this long, then go back to patrol. */
   searchSeconds: 3.5,
@@ -65,8 +65,8 @@ export const GUARD = {
   hitRecoverSeconds: 1.2,
   contactPadding: 0.05,
   /** New guards appear in this distance band: out of reach, but inside loseRange so they start chasing. */
-  minSpawnDistance: 9,
-  maxSpawnDistance: 12,
+  minSpawnDistance: 6,
+  maxSpawnDistance: 7.5,
 } as const;
 
 /** Data-driven difficulty: when each extra guard joins (seconds). Dogs/folklore arrive in M5. */

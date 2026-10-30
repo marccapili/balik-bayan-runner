@@ -134,7 +134,7 @@ describe('PickupField', () => {
 describe('GuardBrain', () => {
   it('alerts, then chases a visible hero and closes the distance', () => {
     const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
-    const hero = { x: 0, z: -2 };
+    const hero = { x: 0, z: -6 };
     g.update(0.05, hero);
     expect(g.state).toBe('alert');
     for (let i = 0; i < 20; i++) g.update(0.05, hero);
@@ -144,8 +144,8 @@ describe('GuardBrain', () => {
     expect(Math.hypot(hero.x - g.pos.x, hero.z - g.pos.z)).toBeLessThan(d0 - 2);
   });
   it('navigates around walls into another gallery', () => {
-    const g = new GuardBrain({ x: -5, z: 13 }, nav, sight, world, [{ x: 0, z: 0 }], seeded());
-    const hero = { x: -17, z: 6 };
+    const g = new GuardBrain({ x: -8, z: 8 }, nav, sight, world, [{ x: 0, z: 0 }], seeded());
+    const hero = { x: -13, z: 8.5 }; // other side of the x=-10 wall, door is at z 10.5..15.5
     g.alertTo(hero);
     for (let i = 0; i < 400; i++) {
       g.update(0.05, hero);

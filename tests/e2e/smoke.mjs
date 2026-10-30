@@ -154,9 +154,9 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const dist = (s) => (s.guards[0] ? Math.hypot(s.guards[0].x - s.x, s.guards[0].z - s.z) : NaN);
   const g0 = await until((s) => s.guards.length >= 1);
   const d0 = dist(g0);
-  check('a guard spawns at run start, far from the hero', g0.guards.length === 1 && d0 >= 8.9 && d0 <= 12.1, `d=${d0.toFixed(1)}`);
-  const g1 = await until((s) => dist(s) < d0 - 3 || s.hearts < 3);
-  check('guard pursues the hero', dist(g1) < d0 - 3 || g1.hearts < 3, `d ${d0.toFixed(1)} → ${dist(g1).toFixed(1)}`);
+  check('a guard spawns at run start, far from the hero', g0.guards.length === 1 && d0 >= 5.9 && d0 <= 7.6, `d=${d0.toFixed(1)}`);
+  const g1 = await until((s) => dist(s) < d0 - 2 || s.hearts < 3);
+  check('guard pursues the hero', dist(g1) < d0 - 2 || g1.hearts < 3, `d ${d0.toFixed(1)} → ${dist(g1).toFixed(1)}`);
   await page.screenshot({ path: `${OUT}/m2-chase.png` });
 
   // Outrun: put the hero beyond loseRange → guard gives up ("?") and goes back to patrol.
