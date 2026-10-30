@@ -45,7 +45,7 @@ export class Player {
   }
 
   get heroId(): HeroId {
-    return this.rig.id;
+    return this.rig.id as HeroId;
   }
 
   get position(): Vec2 {
@@ -68,9 +68,37 @@ export class Player {
   update(input: Vec2, dt: number): void {
     this.motor.update(input, dt);
     const speed = this.motor.speed;
-    this.animator.setState(speed > PLAYER_CONFIG.idleThreshold ? 'locomotion' : 'idle');
+    if (!this.animator.busy) this.animator.setState(speed > PLAYER_CONFIG.idleThreshold ? 'locomotion' : 'idle');
     this.animator.update(dt, speed, PLAYER_CONFIG.maxSpeed);
     this.syncVisual();
+  }
+
+  /** Plays the recoil clip and shoves the hero away from the hit. */
+  hurt(dir: Vec2, impulse: number): void {
+    this.animator.setState('hurt');
+    this.motor.state.vel = { x: dir.x * impulse, z: dir.z * impulse };
+  }
+
+  /** Game-over beat: topple over while the world slows down (no input). */
+  updateDefeated(dt: number): void {
+    this.animator.setState('defeated');
+    this.motor.update({ x: 0, z: 0 }, dt);
+    this.animator.update(dt, 0, PLAYER_CONFIG.maxSpeed);
+    this.setVisible(true);
+    this.syncVisual();
+  }
+
+  /** Back to a clean standing pose at `start` (replay). */
+  respawn(start: Vec2): void {
+    this.motor.reset(start);
+    this.animator.setState('idle');
+    this.setVisible(true);
+    this.syncVisual();
+  }
+
+  /** Used for the invulnerability blink. */
+  setVisible(v: boolean): void {
+    if (this.rig.root.isEnabled() !== v) this.rig.root.setEnabled(v);
   }
 
   private syncVisual(): void {

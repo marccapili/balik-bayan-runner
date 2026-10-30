@@ -1,5 +1,14 @@
 # Development changelog
 
+## M2 Core survival — 2026-10-30 (awaiting feedback)
+- Security guard: chibi uniform model, patrol → alert ("!" + sound) → chase → search FSM, A* on a 0.5 m nav grid with line-of-sight shortcuts, staggered repaths, guard-guard separation.
+- Difficulty director: guards join at 0/45/90/150 s (max 4), chase speed ramps 4.5 → 5.3 over 4 min (capped). All numbers in `src/data/gameplay.ts`.
+- Hearts (3), 2 s start grace, 1.1 s i-frames with blink, knockback, hurt recoil, guard staggers after a hit.
+- Coins (+10), rare purple coins (+100), heart pickups only when hurt; combo multiplier up to x4; +100 survival bonus every 30 s; floating score text and particle bursts.
+- HUD: hearts, score, combo, timer, run coins. Game over: slow-mo knockdown → results (score, time, coins, best, wallet) → "Laro ulit" clean replay.
+- Versioned local save (wallet, best score/time, runs, mute). Synth sound effects + mute toggle in pause.
+- Tests: 46 unit, 32 browser checks (chase, coin, one-heart damage, game over, save, replay, pause, mute).
+
 ## Milestone 1 — Foundation (2026-10-30)
 Implemented
 - Vite + TS strict + Babylon.js 9 project, pinned versions, GitHub Pages workflow.

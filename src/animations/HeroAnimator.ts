@@ -8,6 +8,8 @@ export type AnimState = 'idle' | 'locomotion' | 'fall' | 'land' | 'hurt' | 'abil
  * Locomotion phase advances with distance travelled (not time), so feet don't slide
  * at different speeds. Blends between idle → walk → run using a smoothed speed ratio.
  */
+const HURT_SECONDS = 0.35;
+
 export class HeroAnimator {
   private state: AnimState = 'idle';
   private stateTime = 0;
@@ -21,6 +23,11 @@ export class HeroAnimator {
 
   get current(): AnimState {
     return this.state;
+  }
+
+  /** True while a one-shot clip (land/hurt/defeated) should not be overridden by locomotion. */
+  get busy(): boolean {
+    return this.state === 'land' || this.state === 'defeated' || (this.state === 'hurt' && this.stateTime < HURT_SECONDS);
   }
 
   /** Enters a state only if it differs, so callers can call this every frame safely. */
@@ -42,6 +49,11 @@ export class HeroAnimator {
     this.moveBlend += (ratio - this.moveBlend) * damp(12, dt);
     const m = clamp(this.moveBlend, 0, 1.4);
     this.phase += (speed * dt * Math.PI * 2) / this.stride;
+
+    if (this.state !== 'defeated' && r.body.rotation.x !== 0) {
+      r.body.rotation.x = 0;
+    }
+    if (this.state === 'hurt' && this.stateTime >= HURT_SECONDS) this.state = 'locomotion';
 
     if (this.state === 'idle' || this.state === 'locomotion') {
       const s = Math.sin(this.phase);
@@ -80,6 +92,38 @@ export class HeroAnimator {
       r.legL.rotation.x = -0.4;
       r.legR.rotation.x = 0.2;
       for (const f of r.flutter) f.rotation.x = -0.6;
+    } else if (this.state === 'hurt') {
+      // Quick recoil: snap back, arms fling out, then ease into locomotion.
+      const k = Math.sin(clamp(this.stateTime / HURT_SECONDS, 0, 1) * Math.PI);
+      r.torso.rotation.x = -0.45 * k;
+      r.head.rotation.x = -0.3 * k;
+      r.armL.rotation.set(-0.8 * k, 0, -0.16 - 0.9 * k);
+      r.armR.rotation.set(-0.8 * k, 0, 0.16 + 0.9 * k);
+      r.body.position.y = 0.06 * k;
+    } else if (this.state === 'stunned') {
+      // Dizzy wobble (guards recovering after landing a hit).
+      const w = Math.sin(this.time * 7);
+      r.head.rotation.set(0.12, 0, w * 0.22);
+      r.torso.rotation.set(0.1, 0, w * 0.06);
+      r.armL.rotation.set(0.1, 0, -0.35);
+      r.armR.rotation.set(0.1, 0, 0.35);
+      r.legL.rotation.x = 0;
+      r.legR.rotation.x = 0;
+      r.body.position.y = 0;
+    } else if (this.state === 'defeated') {
+      // Topple backwards and stay down (drives the game-over beat).
+      const t = clamp(this.stateTime / 0.55, 0, 1);
+      const e = 1 - (1 - t) * (1 - t);
+      const bounce = t >= 1 ? 0 : Math.sin(t * Math.PI) * 0.15;
+      r.body.rotation.x = -1.42 * e;
+      r.body.position.y = 0.22 * e + bounce;
+      r.torso.rotation.set(0, 0, 0);
+      r.head.rotation.set(-0.2 * e, 0.3 * e, 0);
+      r.armL.rotation.set(-2.2 * e, 0, -0.5 * e);
+      r.armR.rotation.set(-2.2 * e, 0, 0.5 * e);
+      r.legL.rotation.x = 0.35 * e;
+      r.legR.rotation.x = -0.1 * e;
+      for (const f of r.flutter) f.rotation.x = -0.3 * e;
     } else if (this.state === 'land') {
       const t = clamp(this.stateTime / 0.35, 0, 1);
       const squash = Math.sin(t * Math.PI) * 0.18;

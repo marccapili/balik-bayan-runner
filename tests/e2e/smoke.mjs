@@ -38,13 +38,14 @@ async function holdUntil(page, keys, pred, maxMs = 15000) {
   return s;
 }
 
-async function bootPage(browser, opts) {
+// Movement/collision checks run with ?peaceful (no guards) so a hit can't nudge the hero.
+async function bootPage(browser, opts, query = '?peaceful') {
   const ctx = await browser.newContext(opts);
   const page = await ctx.newPage();
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(URL);
+  await page.goto(URL + query);
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'playing', null, { timeout: 30000 });
   await wait(800);
   return { ctx, page, errors };
@@ -131,6 +132,77 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const perf = await snap(page);
   check('no console errors (desktop)', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`   perf (headless SwiftShader, CPU-rendered): ${perf.fps.toFixed(0)} fps, ${perf.meshes} meshes, drawCalls=${perf.drawCalls}`);
+  await ctx.close();
+}
+
+// ── M2 survival loop: guard chase, coins, hearts, game over, replay ──
+{
+  const { ctx, page, errors } = await bootPage(browser, { viewport: { width: 1280, height: 720 } }, '');
+  const until = async (pred, maxMs = 20000, each) => {
+    const t0 = Date.now();
+    let s = await snap(page);
+    while (!pred(s) && Date.now() - t0 < maxMs) {
+      if (each) await each(s);
+      await wait(100);
+      s = await snap(page);
+    }
+    return s;
+  };
+  const dist = (s) => (s.guards[0] ? Math.hypot(s.guards[0].x - s.x, s.guards[0].z - s.z) : NaN);
+  const g0 = await until((s) => s.guards.length >= 1);
+  const d0 = dist(g0);
+  check('a guard spawns at run start, far from the hero', g0.guards.length === 1 && d0 >= 13.9, `d=${d0.toFixed(1)}`);
+  const g1 = await until((s) => dist(s) < d0 - 4 || s.hearts < 3);
+  check('guard pursues the hero', dist(g1) < d0 - 4 || g1.hearts < 3, `d ${d0.toFixed(1)} → ${dist(g1).toFixed(1)}`);
+  await page.screenshot({ path: `${OUT}/m2-chase.png` });
+
+  // Coins: stand on the nearest coin.
+  const c = g1.coins.filter((k) => k.kind === 'coin').sort((a, b) => Math.hypot(a.x - g1.x, a.z - g1.z) - Math.hypot(b.x - g1.x, b.z - g1.z))[0];
+  const sc0 = g1.score;
+  await page.evaluate(([x, z]) => window.__bbr.debug.teleport(x, z), [c.x, c.z]);
+  const sc1 = await until((s) => s.score > sc0, 5000);
+  check('collecting a coin raises score and run coins', sc1.score >= sc0 + 10 && sc1.runCoins >= 1, `score ${sc0} → ${sc1.score}, coins ${sc1.runCoins}`);
+  await page.screenshot({ path: `${OUT}/m2-coin.png` });
+
+  // One hit removes exactly one heart.
+  const ready = await until((s) => !s.invulnerable && s.guards[0]?.state !== 'stunned' && s.state === 'playing');
+  const h0 = ready.hearts;
+  const hit = await until((s) => s.hearts < h0, 8000, (s) => page.evaluate(([x, z]) => window.__bbr.debug.moveGuard(0, x + 0.3, z), [s.x, s.z]));
+  check('guard contact removes exactly one heart', hit.hearts === h0 - 1, `hearts ${h0} → ${hit.hearts}`);
+  check('hit starts invulnerability frames', hit.invulnerable === true);
+  await page.screenshot({ path: `${OUT}/m2-hit.png` });
+
+  // Keep getting caught until the run ends.
+  const over = await until((s) => s.state === 'gameover', 40000, (s) =>
+    s.state === 'playing' && !s.invulnerable
+      ? page.evaluate(([x, z, n]) => { for (let i = 0; i < n; i++) window.__bbr.debug.moveGuard(i, x + 0.3, z); }, [s.x, s.z, s.guards.length])
+      : null);
+  check('zero hearts ends the run', over.state === 'gameover' && over.hearts === 0, `state=${over.state} hearts=${over.hearts}`);
+  const res = await until((s) => s.results, 15000);
+  check('results panel appears after the knockout beat', res.results);
+  check('run is saved (best score + wallet)', res.save.runs === 1 && res.save.bestScore === res.score && res.save.coins === res.runCoins, JSON.stringify(res.save));
+  await page.screenshot({ path: `${OUT}/m2-gameover.png` });
+
+  await page.click('[data-act="replay"]');
+  await wait(200);
+  const rp = await snap(page);
+  check('Laro ulit starts a clean run', rp.state === 'playing' && rp.hearts === 3 && rp.score === 0 && rp.runTime < 1 && !rp.results && rp.guards.length <= 1,
+    `hearts=${rp.hearts} score=${rp.score} t=${rp.runTime?.toFixed(2)} guards=${rp.guards.length}`);
+  await until((s) => s.runTime > 0.5, 8000);
+  await page.keyboard.press('Escape');
+  await wait(300);
+  const pa = await snap(page);
+  await wait(600);
+  const pb = await snap(page);
+  check('run time freezes while paused', pa.state === 'paused' && pa.runTime === pb.runTime, `${pa.state} ${pa.runTime} ${pb.runTime}`);
+  await page.click('[data-act="mute"]');
+  await wait(100);
+  const mu = await snap(page);
+  check('mute toggle works and is saved', mu.save.muted === true && (await page.textContent('.mute-label')).includes('OFF'));
+  await page.click('[data-act="mute"]');
+  await page.screenshot({ path: `${OUT}/m2-pause.png` });
+  await page.click('[data-act="resume"]');
+  check('no console errors (survival)', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }
 

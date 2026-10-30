@@ -20,7 +20,7 @@ import { embroideryTrim, faceMaterial, patternCloth, tattooTorso, type FaceSpec 
  *                                    → torso → armL/armR, head → (hair, headwear)
  */
 export interface HeroRig {
-  id: HeroId;
+  id: string;
   root: TransformNode;
   body: TransformNode;
   hips: TransformNode;
@@ -35,10 +35,10 @@ export interface HeroRig {
   meshes: Mesh[];
 }
 
-const LEG_LEN = 0.34;
-const TORSO_H = 0.4;
-const HEAD_R = 0.5;
-const ARM_LEN = 0.33;
+export const LEG_LEN = 0.34;
+export const TORSO_H = 0.4;
+export const HEAD_R = 0.5;
+export const ARM_LEN = 0.33;
 
 const SKIN_LIGHT = '#eab48b';
 const SKIN_TAN = '#c98a5e';
@@ -57,7 +57,7 @@ const LOOKS: Record<HeroId, Look> = {
   gabriela: { skin: SKIN_LIGHT, hair: '#2d1a13', face: { brow: '#2d1a13', iris: '#6b3e1f', lash: '#1b100b', mouth: 'frown', browTilt: 0.26, feminine: true } },
 };
 
-class Kit {
+export class Kit {
   readonly meshes: Mesh[] = [];
   constructor(
     readonly scene: Scene,
@@ -114,7 +114,27 @@ class Kit {
 export function buildHero(scene: Scene, id: HeroId): HeroRig {
   const k = new Kit(scene, id);
   const L = LOOKS[id];
+  const p = buildSkeleton(k, faceMaterial(scene, id, { skin: L.skin, ...L.face }), L.skin);
 
+  switch (id) {
+    case 'rizal':
+      buildRizal(k, L, p);
+      break;
+    case 'lapulapu':
+      buildLapu(k, L, p);
+      break;
+    case 'bonifacio':
+      buildBonifacio(k, L, p);
+      break;
+    case 'gabriela':
+      buildGabriela(k, L, p);
+      break;
+  }
+  return { id, meshes: k.meshes, ...p };
+}
+
+/** Shared chibi skeleton: rig nodes, painted-face head, ears and neck. Costume goes on top. */
+export function buildSkeleton(k: Kit, face: Material, skin: string): Parts & { root: TransformNode; body: TransformNode } {
   const root = k.node('root', null);
   const body = k.node('body', root);
   const hips = k.node('hips', body, 0, LEG_LEN, 0);
@@ -126,38 +146,20 @@ export function buildHero(scene: Scene, id: HeroId): HeroRig {
   const armR = k.node('armR', torso, 0.3, TORSO_H - 0.06, 0);
   armL.rotation.z = -0.16;
   armR.rotation.z = 0.16;
-  const flutter: TransformNode[] = [];
 
-  // ── Head: painted face + ears ──
-  const skull = k.sphere(head, faceMaterial(scene, id, { skin: L.skin, ...L.face }), HEAD_R * 2, 32);
+  const skull = k.sphere(head, face, HEAD_R * 2, 32);
   skull.scaling.set(1.05, 0.97, 1);
   for (const side of [-1, 1]) {
-    const ear = k.sphere(head, L.skin, 0.17, 10);
+    const ear = k.sphere(head, skin, 0.17, 10);
     ear.scaling.set(0.5, 0.9, 0.7);
     ear.position.set(side * HEAD_R * 1.02, -0.06, -0.02);
   }
-  const neck = k.cyl(torso, L.skin, 0.12, 0.17, 0.19, 12);
+  const neck = k.cyl(torso, skin, 0.12, 0.17, 0.19, 12);
   neck.position.y = TORSO_H + 0.02;
-
-  switch (id) {
-    case 'rizal':
-      buildRizal(k, L, { hips, torso, head, legL, legR, armL, armR, flutter });
-      break;
-    case 'lapulapu':
-      buildLapu(k, L, { hips, torso, head, legL, legR, armL, armR, flutter });
-      break;
-    case 'bonifacio':
-      buildBonifacio(k, L, { hips, torso, head, legL, legR, armL, armR, flutter });
-      break;
-    case 'gabriela':
-      buildGabriela(k, L, { hips, torso, head, legL, legR, armL, armR, flutter });
-      break;
-  }
-
-  return { id, root, body, hips, torso, head, legL, legR, armL, armR, flutter, meshes: k.meshes };
+  return { root, body, hips, torso, head, legL, legR, armL, armR, flutter: [] };
 }
 
-interface Parts {
+export interface Parts {
   hips: TransformNode;
   torso: TransformNode;
   head: TransformNode;
@@ -170,7 +172,7 @@ interface Parts {
 
 // ───────────────────────── shared pieces ─────────────────────────
 
-function legs(k: Kit, p: Parts, upper: string, upperLen: number, lowerColor: string, foot: 'boot' | 'sandal', skin: string, cuff?: string): void {
+export function legs(k: Kit, p: Parts, upper: string, upperLen: number, lowerColor: string, foot: 'boot' | 'sandal', skin: string, cuff?: string): void {
   for (const leg of [p.legL, p.legR]) {
     const u = k.cyl(leg, upper, upperLen, 0.2, 0.18, 14);
     u.position.y = -upperLen / 2;
@@ -202,7 +204,7 @@ function legs(k: Kit, p: Parts, upper: string, upperLen: number, lowerColor: str
   }
 }
 
-function arms(k: Kit, p: Parts, sleeve: Material | string | null, sleeveFrac: number, skin: string, cuff?: string, puff = false): void {
+export function arms(k: Kit, p: Parts, sleeve: Material | string | null, sleeveFrac: number, skin: string, cuff?: string, puff = false): void {
   for (const arm of [p.armL, p.armR]) {
     const sl = ARM_LEN * sleeveFrac;
     if (sleeve && sleeveFrac > 0) {
@@ -232,7 +234,7 @@ function arms(k: Kit, p: Parts, sleeve: Material | string | null, sleeveFrac: nu
 }
 
 /** Hair cap that covers top/back of the head and leaves the face clear. */
-function hairCap(k: Kit, head: TransformNode, color: string, scale = 1.0): void {
+export function hairCap(k: Kit, head: TransformNode, color: string, scale = 1.0): void {
   const cap = k.sphere(head, color, HEAD_R * 2.14 * scale, 18);
   cap.scaling.set(1.06, 1, 1.04);
   cap.position.set(0, 0.06, -0.07);
@@ -247,7 +249,7 @@ function hairCap(k: Kit, head: TransformNode, color: string, scale = 1.0): void 
 }
 
 /** Downward fringe locks over the forehead. `sweep` tilts them to one side. */
-function fringe(k: Kit, head: TransformNode, color: string, count: number, sweep: number, len = 0.24): void {
+export function fringe(k: Kit, head: TransformNode, color: string, count: number, sweep: number, len = 0.24): void {
   for (let i = 0; i < count; i++) {
     const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
     const y = HEAD_R * 0.6 - Math.abs(t) * 0.04;

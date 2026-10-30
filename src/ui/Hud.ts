@@ -1,3 +1,4 @@
+import { HEALTH } from '../data/gameplay';
 import { HEROES, type HeroId } from '../data/heroes';
 
 export interface HudCallbacks {
@@ -5,6 +6,25 @@ export interface HudCallbacks {
   onResume(): void;
   onRestart(): void;
   onNextHero(): void;
+  onReplay(): void;
+  onToggleMute(): void;
+}
+
+export interface RunStats {
+  hearts: number;
+  score: number;
+  coins: number;
+  time: number;
+  multiplier: number;
+}
+
+export interface RunResult {
+  score: number;
+  time: number;
+  coins: number;
+  bestScore: number;
+  newBest: boolean;
+  wallet: number;
 }
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
@@ -13,13 +33,27 @@ const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   return el;
 };
 
-/** HTML overlay for the in-run HUD and pause menu. Every button here does something. */
+export const formatTime = (s: number): string => {
+  const t = Math.max(0, Math.floor(s));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
+
+/** HTML overlay for the in-run HUD, pause menu and results. Every button here does something. */
 export class Hud {
   private readonly root: HTMLElement;
   private readonly roomToast: HTMLElement;
   private readonly fps: HTMLElement;
   private readonly heroChip: HTMLElement;
   private readonly pauseMenu: HTMLElement;
+  private readonly results: HTMLElement;
+  private readonly hearts: HTMLElement;
+  private readonly score: HTMLElement;
+  private readonly coins: HTMLElement;
+  private readonly timer: HTMLElement;
+  private readonly mult: HTMLElement;
+  private readonly floats: HTMLElement;
+  private readonly hurtFlash: HTMLElement;
+  private last: RunStats = { hearts: -1, score: -1, coins: -1, time: -1, multiplier: -1 };
   private toastTimer = 0;
   private fpsAcc = 0;
   private fpsFrames = 0;
@@ -27,27 +61,52 @@ export class Hud {
   constructor(host: HTMLElement, cb: HudCallbacks) {
     this.root = document.createElement('div');
     this.root.className = 'hud';
+    const heartIcons = Array.from({ length: HEALTH.maxHearts }, () => '<span class="heart"></span>').join('');
     this.root.innerHTML = `
+      <div class="hurt-flash"></div>
+      <div class="floats"></div>
       <div class="hud-top">
-        <button class="chip hero-chip" data-act="hero" aria-label="Switch hero preview">
-          <span class="hero-dot"></span><span class="hero-name"></span><span class="chip-sub">tap to switch</span>
-        </button>
+        <div class="hud-left">
+          <div class="hearts" aria-label="Hearts">${heartIcons}</div>
+          <div class="score-line"><span class="score">0</span><span class="mult" hidden>x2</span></div>
+        </div>
+        <div class="timer" aria-label="Survival time">0:00</div>
         <div class="hud-right">
           <span class="fps" hidden></span>
+          <span class="coin-chip" aria-label="Coins this run"><span class="coin-icon"></span><b class="coins">0</b></span>
           <button class="icon-btn" data-act="pause" aria-label="Pause">❚❚</button>
         </div>
       </div>
+      <button class="chip hero-chip" data-act="hero" aria-label="Switch hero preview">
+        <span class="hero-dot"></span><span class="hero-name"></span><span class="chip-sub">tap to switch</span>
+      </button>
       <div class="room-toast" aria-live="polite"></div>
       <div class="hint">
-        <span class="hint-desktop"><b>WASD</b> / <b>Arrow keys</b> para gumalaw · <b>1–4</b> switch hero · <b>Esc</b> pause</span>
-        <span class="hint-touch">Drag sa left side para gumalaw, bes 👈</span>
+        <span class="hint-desktop"><b>WASD</b> / <b>Arrows</b> para tumakbo · kunin ang coins · iwasan ang guard 👮 · <b>Esc</b> pause</span>
+        <span class="hint-touch">Drag sa left side para tumakbo, iwas sa guard 👮</span>
       </div>
-      <div class="pause-menu" hidden>
+      <div class="pause-menu overlay" hidden>
         <div class="panel">
           <h2>Paused muna ☕</h2>
           <p>Chill lang, hindi ka hahabulin habang naka-pause.</p>
           <button class="btn primary" data-act="resume">Tuloy na! ▶</button>
-          <button class="btn" data-act="restart">Ulitin (back to spawn)</button>
+          <button class="btn" data-act="restart">Ulitin ang run 🔁</button>
+          <button class="btn" data-act="mute"><span class="mute-label">Tunog: ON 🔊</span></button>
+        </div>
+      </div>
+      <div class="results overlay" hidden>
+        <div class="panel">
+          <h2>Huli ka, bes! 😵</h2>
+          <p class="res-sub">Na-escort ka palabas ng museo. Babawi tayo!</p>
+          <div class="new-best" hidden>🏆 NEW BEST! Sheesh!</div>
+          <dl class="stats">
+            <div><dt>Score</dt><dd class="r-score">0</dd></div>
+            <div><dt>Oras</dt><dd class="r-time">0:00</dd></div>
+            <div><dt>Coins</dt><dd class="r-coins">0</dd></div>
+            <div><dt>Best</dt><dd class="r-best">0</dd></div>
+          </dl>
+          <p class="wallet">Wallet mo: <b class="r-wallet">0</b> coins</p>
+          <button class="btn primary" data-act="replay">Laro ulit! 🔁</button>
         </div>
       </div>`;
     host.appendChild(this.root);
@@ -55,6 +114,14 @@ export class Hud {
     this.fps = $(this.root, '.fps');
     this.heroChip = $(this.root, '.hero-chip');
     this.pauseMenu = $(this.root, '.pause-menu');
+    this.results = $(this.root, '.results');
+    this.hearts = $(this.root, '.hearts');
+    this.score = $(this.root, '.score');
+    this.coins = $(this.root, '.coins');
+    this.timer = $(this.root, '.timer');
+    this.mult = $(this.root, '.mult');
+    this.floats = $(this.root, '.floats');
+    this.hurtFlash = $(this.root, '.hurt-flash');
 
     this.root.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
@@ -62,6 +129,8 @@ export class Hud {
       else if (act === 'resume') cb.onResume();
       else if (act === 'restart') cb.onRestart();
       else if (act === 'hero') cb.onNextHero();
+      else if (act === 'replay') cb.onReplay();
+      else if (act === 'mute') cb.onToggleMute();
     });
     if (new URLSearchParams(location.search).has('debug')) this.fps.hidden = false;
   }
@@ -82,8 +151,75 @@ export class Hud {
     if (p) $(this.pauseMenu, '[data-act="resume"]').focus();
   }
 
+  setMuted(m: boolean): void {
+    $(this.pauseMenu, '.mute-label').textContent = m ? 'Tunog: OFF 🔇' : 'Tunog: ON 🔊';
+  }
+
+  /** Cheap per-frame update: DOM is only touched when a value changes. */
+  setStats(s: RunStats): void {
+    const l = this.last;
+    if (s.hearts !== l.hearts) {
+      this.hearts.querySelectorAll('.heart').forEach((el, i) => {
+        const wasFull = el.classList.contains('full');
+        const full = i < s.hearts;
+        el.classList.toggle('full', full);
+        if (wasFull && !full) {
+          el.classList.remove('lost');
+          void (el as HTMLElement).offsetWidth;
+          el.classList.add('lost');
+        }
+      });
+    }
+    if (s.score !== l.score) this.score.textContent = s.score.toLocaleString('en-US');
+    if (s.coins !== l.coins) this.coins.textContent = String(s.coins);
+    const sec = Math.floor(s.time);
+    if (sec !== Math.floor(l.time)) this.timer.textContent = formatTime(s.time);
+    if (s.multiplier !== l.multiplier) {
+      this.mult.hidden = s.multiplier <= 1;
+      this.mult.textContent = `x${s.multiplier} combo`;
+    }
+    this.last = { ...s };
+  }
+
+  flashHurt(): void {
+    this.hurtFlash.classList.remove('on');
+    void this.hurtFlash.offsetWidth;
+    this.hurtFlash.classList.add('on');
+  }
+
+  /** "+10" style text rising from a screen point. */
+  floatText(x: number, y: number, text: string, kind: 'coin' | 'rare' | 'heart' | 'bonus'): void {
+    const el = document.createElement('span');
+    el.className = `float ${kind}`;
+    el.textContent = text;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    this.floats.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+    while (this.floats.childElementCount > 14) this.floats.firstElementChild?.remove();
+  }
+
+  showResults(r: RunResult): void {
+    $(this.results, '.r-score').textContent = r.score.toLocaleString('en-US');
+    $(this.results, '.r-time').textContent = formatTime(r.time);
+    $(this.results, '.r-coins').textContent = String(r.coins);
+    $(this.results, '.r-best').textContent = r.bestScore.toLocaleString('en-US');
+    $(this.results, '.r-wallet').textContent = r.wallet.toLocaleString('en-US');
+    $(this.results, '.new-best').hidden = !r.newBest;
+    this.results.hidden = false;
+    $(this.results, '[data-act="replay"]').focus();
+  }
+
+  hideResults(): void {
+    this.results.hidden = true;
+  }
+
+  get resultsVisible(): boolean {
+    return !this.results.hidden;
+  }
+
   showRoom(title: string, subtitle: string): void {
-    this.roomToast.innerHTML = `<b>📍 ${title}</b><span>${subtitle}</span>`;
+    this.roomToast.innerHTML = `<b>${title}</b><span>${subtitle}</span>`;
     this.roomToast.classList.remove('show');
     void this.roomToast.offsetWidth; // restart CSS animation
     this.roomToast.classList.add('show');
