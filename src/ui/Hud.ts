@@ -1,12 +1,12 @@
 import { HEALTH } from '../data/gameplay';
-import { HEROES, type HeroId } from '../data/heroes';
 
 export interface HudCallbacks {
   onPause(): void;
   onResume(): void;
   onRestart(): void;
-  onNextHero(): void;
   onReplay(): void;
+  onLobby(): void;
+  onDrop(): void;
   onToggleMute(): void;
 }
 
@@ -43,7 +43,7 @@ export class Hud {
   private readonly root: HTMLElement;
   private readonly roomToast: HTMLElement;
   private readonly fps: HTMLElement;
-  private readonly heroChip: HTMLElement;
+  private readonly dropPrompt: HTMLElement;
   private readonly pauseMenu: HTMLElement;
   private readonly results: HTMLElement;
   private readonly hearts: HTMLElement;
@@ -77,8 +77,9 @@ export class Hud {
           <button class="icon-btn" data-act="pause" aria-label="Pause">❚❚</button>
         </div>
       </div>
-      <button class="chip hero-chip" data-act="hero" aria-label="Switch hero preview">
-        <span class="hero-dot"></span><span class="hero-name"></span><span class="chip-sub">tap to switch</span>
+      <button class="drop-prompt" data-act="drop" hidden>
+        <span class="dp-big">TAP TO DROP</span>
+        <span class="dp-small"><span class="hint-desktop">Click / Space / WASD</span><span class="hint-touch">Tap kahit saan</span> para bumaba ⬇</span>
       </button>
       <div class="room-toast" aria-live="polite"></div>
       <div class="hint">
@@ -92,6 +93,7 @@ export class Hud {
           <button class="btn primary" data-act="resume">Tuloy na! ▶</button>
           <button class="btn" data-act="restart">Ulitin ang run 🔁</button>
           <button class="btn" data-act="mute"><span class="mute-label">Tunog: ON 🔊</span></button>
+          <button class="btn" data-act="lobby">Balik sa lobby 🏠</button>
         </div>
       </div>
       <div class="results overlay" hidden>
@@ -107,12 +109,13 @@ export class Hud {
           </dl>
           <p class="wallet">Wallet mo: <b class="r-wallet">0</b> coins</p>
           <button class="btn primary" data-act="replay">Laro ulit! 🔁</button>
+          <button class="btn" data-act="lobby">Lobby 🏠</button>
         </div>
       </div>`;
     host.appendChild(this.root);
     this.roomToast = $(this.root, '.room-toast');
     this.fps = $(this.root, '.fps');
-    this.heroChip = $(this.root, '.hero-chip');
+    this.dropPrompt = $(this.root, '.drop-prompt');
     this.pauseMenu = $(this.root, '.pause-menu');
     this.results = $(this.root, '.results');
     this.hearts = $(this.root, '.hearts');
@@ -128,8 +131,9 @@ export class Hud {
       if (act === 'pause') cb.onPause();
       else if (act === 'resume') cb.onResume();
       else if (act === 'restart') cb.onRestart();
-      else if (act === 'hero') cb.onNextHero();
       else if (act === 'replay') cb.onReplay();
+      else if (act === 'lobby') cb.onLobby();
+      else if (act === 'drop') cb.onDrop();
       else if (act === 'mute') cb.onToggleMute();
     });
     if (new URLSearchParams(location.search).has('debug')) this.fps.hidden = false;
@@ -139,11 +143,18 @@ export class Hud {
     this.fps.hidden = !this.fps.hidden;
   }
 
-  setHero(id: HeroId): void {
-    const h = HEROES[id];
-    $(this.heroChip, '.hero-name').textContent = h.name;
-    $(this.heroChip, '.hero-dot').dataset.hero = id;
-    this.heroChip.title = `${h.title} · ${h.heroClass}`;
+  /** 'off' = lobby, 'intro' = cinematic (stats hidden), 'play' = full HUD. */
+  setMode(mode: 'off' | 'intro' | 'play'): void {
+    this.root.dataset.mode = mode;
+    if (mode !== 'intro') this.showDrop(false);
+  }
+
+  showDrop(v: boolean): void {
+    this.dropPrompt.hidden = !v;
+  }
+
+  get dropVisible(): boolean {
+    return !this.dropPrompt.hidden;
   }
 
   setPaused(p: boolean): void {

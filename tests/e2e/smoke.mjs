@@ -39,7 +39,7 @@ async function holdUntil(page, keys, pred, maxMs = 15000) {
 }
 
 // Movement/collision checks run with ?peaceful (no guards) so a hit can't nudge the hero.
-async function bootPage(browser, opts, query = '?peaceful') {
+async function bootPage(browser, opts, query = '?peaceful&play') {
   const ctx = await browser.newContext(opts);
   const page = await ctx.newPage();
   const errors = [];
@@ -140,7 +140,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 
 // ── M2 survival loop: guard chase, coins, hearts, game over, replay ──
 {
-  const { ctx, page, errors } = await bootPage(browser, { viewport: { width: 1280, height: 720 } }, '');
+  const { ctx, page, errors } = await bootPage(browser, { viewport: { width: 1280, height: 720 } }, '?play');
   const until = async (pred, maxMs = 20000, each) => {
     const t0 = Date.now();
     let s = await snap(page);
@@ -214,8 +214,11 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await page.click('[data-act="replay"]');
   await wait(200);
   const rp = await snap(page);
-  check('Laro ulit starts a clean run', rp.state === 'playing' && rp.hearts === 3 && rp.score === 0 && rp.runTime < 1 && !rp.results && rp.guards.length <= 1,
-    `hearts=${rp.hearts} score=${rp.score} t=${rp.runTime?.toFixed(2)} guards=${rp.guards.length}`);
+  check('Laro ulit replays the intro with a clean run', rp.state === 'intro' && rp.hearts === 3 && rp.score === 0 && rp.runTime === 0 && !rp.results && rp.guards.length <= 1,
+    `state=${rp.state} hearts=${rp.hearts} score=${rp.score} t=${rp.runTime?.toFixed(2)} guards=${rp.guards.length}`);
+  await until((s) => s.dropPrompt, 15000);
+  await page.keyboard.press('Space');
+  await until((s) => s.state === 'playing', 20000);
   await until((s) => s.runTime > 0.5, 8000);
   await page.keyboard.press('Escape');
   await wait(300);
@@ -223,14 +226,124 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await wait(600);
   const pb = await snap(page);
   check('run time freezes while paused', pa.state === 'paused' && pa.runTime === pb.runTime, `${pa.state} ${pa.runTime} ${pb.runTime}`);
-  await page.click('[data-act="mute"]');
+  await page.click('.pause-menu [data-act="mute"]');
   await wait(100);
   const mu = await snap(page);
-  check('mute toggle works and is saved', mu.save.muted === true && (await page.textContent('.mute-label')).includes('OFF'));
-  await page.click('[data-act="mute"]');
+  check('mute toggle works and is saved', mu.save.settings.muted === true && (await page.textContent('.mute-label')).includes('OFF'));
+  await page.click('.pause-menu [data-act="mute"]');
   await page.screenshot({ path: `${OUT}/m2-pause.png` });
   await page.click('[data-act="resume"]');
+
+  // Results → Lobby button.
+  const over2 = await until((s) => s.results, 50000, (s) =>
+    s.state === 'playing' && !s.invulnerable
+      ? page.evaluate(([x, z, n]) => { for (let i = 0; i < n; i++) window.__bbr.debug.moveGuard(i, x + 0.3, z); }, [s.x, s.z, s.guards.length])
+      : null);
+  check('second run ends with results', over2.results);
+  await page.click('.results [data-act="lobby"]');
+  const lb = await until((s) => s.state === 'lobby', 10000);
+  check('results Lobby button returns to the lobby', lb.state === 'lobby' && !lb.results);
   check('no console errors (survival)', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
+// ── M3 lobby + cinematic intro (normal boot, no query) ──
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(URL);
+  await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
+  await wait(1500);
+  const until = async (pred, maxMs = 20000) => {
+    const t0 = Date.now();
+    let s = await snap(page);
+    while (!pred(s) && Date.now() - t0 < maxMs) {
+      await wait(100);
+      s = await snap(page);
+    }
+    return s;
+  };
+  check('game opens on the lobby', (await snap(page)).state === 'lobby');
+  await page.screenshot({ path: `${OUT}/m3-lobby.png` });
+
+  for (const panel of ['heroes', 'leaderboard', 'settings', 'profile']) {
+    await page.click(`.lobby [data-act="${panel}"]`);
+    await wait(150);
+    const open = (await snap(page)).lobbyPanel === panel && (await page.isVisible('.lobby .sheet'));
+    if (panel === 'heroes') await page.screenshot({ path: `${OUT}/m3-heroes.png` });
+    await page.click('.lobby [data-act="close"]');
+    await wait(150);
+    check(`lobby ${panel} panel opens and closes`, open && (await snap(page)).lobbyPanel === null);
+  }
+
+  await page.click('.lobby [data-act="settings"]');
+  await page.click('.lobby [data-act="mute"]');
+  await page.click('.lobby [data-act="reduced"]');
+  const st = (await snap(page)).save.settings;
+  check('settings toggles save (sound, reduced effects)', st.muted === true && st.reducedEffects === true, JSON.stringify(st));
+  await page.click('.lobby [data-act="mute"]');
+  await page.click('.lobby [data-act="reduced"]');
+  await page.evaluate(() => window.__bbr.debug.addCoins(77));
+  await page.click('.lobby [data-act="reset"]');
+  const armed = (await snap(page)).save.coins === 77;
+  await page.click('.lobby [data-act="reset"]');
+  check('reset needs two taps, then wipes progress', armed && (await snap(page)).save.coins === 0);
+  await page.click('.lobby [data-act="close"]');
+
+  await page.click('.lobby [data-act="profile"]');
+  await page.fill('.nick-input', '<bad>');
+  await page.click('.nick-form [type="submit"]');
+  const bad = await page.isVisible('.nick-msg.bad');
+  await page.fill('.nick-input', 'Rei Tester');
+  await page.click('.nick-form [type="submit"]');
+  await wait(100);
+  check('profile nickname validates and saves', bad && (await snap(page)).save.nickname === 'Rei Tester');
+  await page.click('.lobby [data-act="close"]');
+
+  await page.click('.lobby [data-act="next"]');
+  await wait(200);
+  const nx = await snap(page);
+  check('next arrow previews the next hero', nx.previewHero === 'lapulapu');
+  await page.click('.lobby [data-act="play"]', { force: true });
+  await wait(300);
+  check('locked hero cannot start a run without coins', (await snap(page)).state === 'lobby' && !(await snap(page)).save.ownedHeroes.includes('lapulapu'));
+  await page.evaluate(() => window.__bbr.debug.addCoins(300));
+  await page.click('.lobby [data-act="play"]');
+  await wait(200);
+  const un = await snap(page);
+  check('PLAY on a locked hero unlocks it when affordable', un.state === 'lobby' && un.save.ownedHeroes.includes('lapulapu') && un.save.coins === 0 && un.save.selectedHero === 'lapulapu');
+  await page.click('.lobby [data-act="prev"]');
+  await wait(200);
+  check('prev arrow goes back and selects owned hero', (await snap(page)).save.selectedHero === 'rizal');
+
+  await page.click('.lobby [data-act="play"]');
+  await wait(300);
+  check('PLAY starts the intro, not the chase', ['lobby', 'intro'].includes((await snap(page)).state) && (await snap(page)).runTime === 0);
+  const fl = await until((s) => s.dropPrompt, 30000);
+  check('hero floats with TAP TO DROP', fl.state === 'intro' && fl.introPhase === 'float' && fl.dropPrompt);
+  await wait(2500);
+  const still = await snap(page);
+  check('hero keeps floating until input (no timer, no damage)', still.introPhase === 'float' && still.runTime === 0 && still.hearts === 3);
+  await page.screenshot({ path: `${OUT}/m3-float.png` });
+  await page.mouse.click(640, 400);
+  const fall = await until((s) => s.introPhase !== 'float', 5000);
+  check('tap drops the hero', ['fall', 'land', 'notice', 'done'].includes(fall.introPhase) && !fall.dropPrompt, fall.introPhase);
+  const nt = await until((s) => s.introPhase === 'notice' || s.state === 'playing', 20000);
+  check('hero lands, then the guard reacts', nt.introPhase === 'notice' || nt.state === 'playing');
+  const pl = await until((s) => s.state === 'playing', 20000);
+  check('chase + timer start after the intro', pl.state === 'playing' && pl.guards.length >= 1 && ['alert', 'chase'].includes(pl.guards[0].state), JSON.stringify(pl.guards));
+  const later = await until((s) => s.runTime > 0.5, 10000);
+  check('run timer ticks once playing', later.runTime > 0.5);
+
+  await page.keyboard.press('Escape');
+  await wait(200);
+  await page.click('.pause-menu [data-act="lobby"]');
+  const back = await until((s) => s.state === 'lobby', 10000);
+  check('pause → Balik sa lobby works', back.state === 'lobby');
+  check('no console errors (lobby + intro)', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }
 
@@ -262,10 +375,19 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   check(`${label}: pause button works on touch`, (await snap(page)).state === 'paused');
   await page.screenshot({ path: `${OUT}/${label}-pause.png` });
   await page.tap('[data-act="resume"]');
-  await page.tap('[data-act="hero"]');
-  await wait(300);
-  check(`${label}: hero switch chip works`, (await snap(page)).hero === 'lapulapu');
+  await wait(200);
   await page.screenshot({ path: `${OUT}/${label}.png` });
+  await page.tap('[data-act="pause"]');
+  await wait(150);
+  await page.tap('.pause-menu [data-act="lobby"]');
+  const t0 = Date.now();
+  while ((await snap(page)).state !== 'lobby' && Date.now() - t0 < 10000) await wait(100);
+  check(`${label}: pause → lobby works on touch`, (await snap(page)).state === 'lobby');
+  await wait(1200);
+  await page.screenshot({ path: `${OUT}/${label}-lobby.png` });
+  await page.tap('[data-act="heroes"]');
+  await wait(200);
+  check(`${label}: Heroes button opens on touch`, (await snap(page)).lobbyPanel === 'heroes');
   check(`no console errors (${label})`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }

@@ -3,7 +3,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { HeroAnimator } from '../animations/HeroAnimator';
+import { HeroAnimator, type AnimState } from '../animations/HeroAnimator';
 import { PLAYER_CONFIG } from '../data/config';
 import type { HeroId } from '../data/heroes';
 import type { CollisionWorld } from '../physics/Collision';
@@ -21,6 +21,8 @@ export class Player {
   private rig: HeroRig;
   private animator: HeroAnimator;
   private readonly shadow: Mesh;
+  /** Height above the floor (only non-zero during the intro hover/fall). */
+  private airY = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -88,8 +90,18 @@ export class Player {
     this.syncVisual();
   }
 
+  /** Intro posing: hover/fall/land at height `y` with no input. `spin` turns the hero slowly while floating. */
+  updateIntro(dt: number, y: number, anim: AnimState, spin = 0): void {
+    if (!this.animator.busy) this.animator.setState(anim);
+    this.airY = y;
+    this.motor.state.yaw += spin * dt;
+    this.animator.update(dt, 0, PLAYER_CONFIG.maxSpeed);
+    this.syncVisual();
+  }
+
   /** Back to a clean standing pose at `start` (replay). */
   respawn(start: Vec2): void {
+    this.airY = 0;
     this.motor.reset(start);
     this.animator.setState('idle');
     this.setVisible(true);
@@ -104,7 +116,9 @@ export class Player {
   private syncVisual(): void {
     const s = this.motor.state;
     this.rig.root.scaling.setAll(HERO_SCALE);
-    this.rig.root.position.set(s.pos.x, 0, s.pos.z);
+    this.rig.root.position.set(s.pos.x, this.airY, s.pos.z);
+    // Shadow shrinks while airborne so the drop reads clearly.
+    this.shadow.scaling.setAll(Math.max(0.45, 1 - this.airY * 0.16));
     this.rig.root.rotation.y = s.yaw;
     this.shadow.position.x = s.pos.x;
     this.shadow.position.z = s.pos.z;

@@ -43,7 +43,7 @@ export class StateMachine<S extends string> {
   }
 }
 
-/** Top-level game flow. Lobby / Intro / GameOver are wired in later milestones. */
+/** Top-level game flow: boot → lobby → intro (cinematic) → playing ⇄ paused → gameover → intro | lobby. */
 export type GameState = 'boot' | 'lobby' | 'intro' | 'playing' | 'paused' | 'gameover';
 
 export const GAME_TRANSITIONS: Readonly<Record<GameState, readonly GameState[]>> = {
@@ -51,6 +51,6 @@ export const GAME_TRANSITIONS: Readonly<Record<GameState, readonly GameState[]>>
   lobby: ['intro', 'playing'],
   intro: ['playing', 'lobby'],
   playing: ['paused', 'gameover', 'lobby'],
-  paused: ['playing', 'lobby'],
+  paused: ['playing', 'lobby', 'intro'],
   gameover: ['intro', 'lobby', 'playing'],
 };

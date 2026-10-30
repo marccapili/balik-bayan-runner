@@ -1,7 +1,7 @@
 import type { HeroRig } from '../characters/HeroModel';
 import { clamp, damp, lerp } from '../utils/math';
 
-export type AnimState = 'idle' | 'locomotion' | 'fall' | 'land' | 'hurt' | 'ability' | 'stunned' | 'defeated';
+export type AnimState = 'idle' | 'locomotion' | 'float' | 'fall' | 'land' | 'hurt' | 'ability' | 'stunned' | 'defeated' | 'wave';
 
 /**
  * Procedural animation controller shared by every hero rig.
@@ -9,6 +9,7 @@ export type AnimState = 'idle' | 'locomotion' | 'fall' | 'land' | 'hurt' | 'abil
  * at different speeds. Blends between idle → walk → run using a smoothed speed ratio.
  */
 const HURT_SECONDS = 0.35;
+const WAVE_SECONDS = 1.6;
 
 export class HeroAnimator {
   private state: AnimState = 'idle';
@@ -27,7 +28,12 @@ export class HeroAnimator {
 
   /** True while a one-shot clip (land/hurt/defeated) should not be overridden by locomotion. */
   get busy(): boolean {
-    return this.state === 'land' || this.state === 'defeated' || (this.state === 'hurt' && this.stateTime < HURT_SECONDS);
+    return (
+      this.state === 'land' ||
+      this.state === 'defeated' ||
+      (this.state === 'hurt' && this.stateTime < HURT_SECONDS) ||
+      (this.state === 'wave' && this.stateTime < WAVE_SECONDS)
+    );
   }
 
   /** Enters a state only if it differs, so callers can call this every frame safely. */
@@ -54,6 +60,7 @@ export class HeroAnimator {
       r.body.rotation.x = 0;
     }
     if (this.state === 'hurt' && this.stateTime >= HURT_SECONDS) this.state = 'locomotion';
+    if (this.state === 'wave' && this.stateTime >= WAVE_SECONDS) this.state = 'idle';
 
     if (this.state === 'idle' || this.state === 'locomotion') {
       const s = Math.sin(this.phase);
@@ -84,6 +91,29 @@ export class HeroAnimator {
       for (const f of r.flutter) {
         f.rotation.x = clamp(m, 0, 1.2) * 0.5 + Math.sin(this.phase * 2 + 1) * 0.08 * m + Math.sin(this.time * 2) * 0.03 * idle;
       }
+    } else if (this.state === 'float') {
+      // Time-portal hover: arms drift open, legs dangle and paddle softly.
+      const a = Math.sin(this.time * 1.8);
+      r.armL.rotation.set(-0.25 + a * 0.12, 0, -0.75 - a * 0.1);
+      r.armR.rotation.set(-0.25 - a * 0.12, 0, 0.75 + a * 0.1);
+      r.legL.rotation.x = 0.25 + Math.sin(this.time * 2.2) * 0.18;
+      r.legR.rotation.x = -0.1 - Math.sin(this.time * 2.2) * 0.18;
+      r.torso.rotation.set(-0.06, 0, Math.sin(this.time * 1.1) * 0.05);
+      r.head.rotation.set(-0.12, Math.sin(this.time * 0.8) * 0.25, 0);
+      r.body.position.y = 0;
+      for (const f of r.flutter) f.rotation.x = -0.25 + Math.sin(this.time * 2.5) * 0.12;
+    } else if (this.state === 'wave') {
+      // Lobby personality move: big friendly wave with a little bounce.
+      const t = this.stateTime;
+      const env = clamp(t / 0.25, 0, 1) * clamp((WAVE_SECONDS - t) / 0.3, 0, 1);
+      r.armR.rotation.set(-0.2 * env, 0, 0.16 + 2.5 * env + Math.sin(t * 13) * 0.32 * env);
+      r.armL.rotation.set(0, 0, -0.16 - 0.1 * env);
+      r.legL.rotation.x = 0;
+      r.legR.rotation.x = 0;
+      r.torso.rotation.set(0, 0, -0.08 * env);
+      r.head.rotation.set(0, 0, 0.12 * env + Math.sin(t * 6.5) * 0.04 * env);
+      r.body.position.y = Math.abs(Math.sin(t * 6.5)) * 0.05 * env;
+      for (const f of r.flutter) f.rotation.x = 0.05;
     } else if (this.state === 'fall') {
       // Arms up, legs tucked — used by the intro drop in M3.
       const wob = Math.sin(this.time * 10) * 0.1;
@@ -91,6 +121,9 @@ export class HeroAnimator {
       r.armR.rotation.set(-2.6 - wob, 0, 0.4);
       r.legL.rotation.x = -0.4;
       r.legR.rotation.x = 0.2;
+      r.torso.rotation.set(0.08, 0, 0);
+      r.head.rotation.set(-0.3, 0, 0);
+      r.body.position.y = 0;
       for (const f of r.flutter) f.rotation.x = -0.6;
     } else if (this.state === 'hurt') {
       // Quick recoil: snap back, arms fling out, then ease into locomotion.
@@ -130,6 +163,10 @@ export class HeroAnimator {
       r.body.scaling.set(1 + squash * 0.5, 1 - squash, 1 + squash * 0.5);
       r.armL.rotation.set(0, 0, -0.9 * (1 - t));
       r.armR.rotation.set(0, 0, 0.9 * (1 - t));
+      r.legL.rotation.x = 0;
+      r.legR.rotation.x = 0;
+      r.torso.rotation.set(0.25 * (1 - t), 0, 0);
+      r.head.rotation.set(0.1 * (1 - t), 0, 0);
       if (t >= 1) {
         r.body.scaling.set(1, 1, 1);
         this.setState('idle');

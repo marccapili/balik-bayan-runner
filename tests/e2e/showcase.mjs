@@ -4,7 +4,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1200, height: 700 } });
-await page.goto((process.env.BBR_URL ?? 'http://localhost:4173/') + '?peaceful');
+await page.goto((process.env.BBR_URL ?? 'http://localhost:4173/') + '?peaceful&play');
 await page.waitForFunction(() => window.__bbr?.fsm.state === 'playing');
 for (const [i, id] of ['rizal', 'lapulapu', 'bonifacio', 'gabriela'].entries()) {
   for (const view of ['front', 'back', 'game']) {

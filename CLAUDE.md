@@ -31,5 +31,5 @@ Playwright (preinstalled `playwright` package) for browser smoke tests. No UI fr
 - Before finishing a change: `npm run build && npm test` and the e2e smoke test must pass; look at the screenshots.
 
 ## Current milestone
-M1 Foundation ✅ · M2 Core survival ✅ (awaiting user feedback). Next: M3 lobby + cinematic intro.
-Gameplay rules live in engine-free `gameplay/SurvivalRun.ts`; `?peaceful` disables guards (used by movement e2e checks).
+M1 Foundation ✅ · M2 Core survival ✅ · M3 Lobby + cinematic intro ✅ (awaiting user feedback). Next: M4 heroes/abilities + shop.
+Gameplay rules live in engine-free `gameplay/SurvivalRun.ts`; `?peaceful` disables guards, `?play` skips lobby + intro (both used by e2e checks). FSM: lobby → intro (`gameplay/IntroSequence.ts`) → playing.

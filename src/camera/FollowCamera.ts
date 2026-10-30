@@ -27,6 +27,10 @@ export class FollowCamera {
   private shakeStrength = 0;
   private readonly offset: V3;
   private readonly occluders: Occluder[] = [];
+  /** Distance multiplier (1 = gameplay framing; >1 = wider, used by the intro reveal). */
+  zoom = 1;
+  /** Height the camera looks at (raised while the hero hovers in the intro). */
+  lookY = 0.6;
 
   constructor(scene: Scene, start: Vec2) {
     this.offset = cameraOffset(CAMERA_CONFIG.pitchDeg, CAMERA_CONFIG.distance);
@@ -79,8 +83,9 @@ export class FollowCamera {
 
   private apply(): void {
     const o = this.offset;
-    this.camera.position.set(this.focus.x + o.x, o.y, this.focus.z + o.z);
-    this.camera.setTarget(new Vector3(this.focus.x, 0.6, this.focus.z));
+    const z = this.zoom;
+    this.camera.position.set(this.focus.x + o.x * z, this.lookY + (o.y - 0.6) * z, this.focus.z + o.z * z);
+    this.camera.setTarget(new Vector3(this.focus.x, this.lookY, this.focus.z));
   }
 
   private updateOcclusion(hero: Vec2, dt: number): void {

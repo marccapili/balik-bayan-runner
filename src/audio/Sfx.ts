@@ -2,7 +2,7 @@
  * Tiny synthesised sound effects (Web Audio, no files, no licensing).
  * The AudioContext is created on the first user gesture to satisfy autoplay rules.
  */
-export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click';
+export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -103,6 +103,23 @@ export class Sfx {
         break;
       case 'click':
         this.tone(660, t, 0.05, 'sine', 0.08);
+        break;
+      case 'portal':
+        // Rising shimmer: the time-travel whoosh.
+        this.tone(220, t, 0.9, 'sawtooth', 0.05, 880);
+        this.tone(330, t + 0.05, 0.9, 'triangle', 0.08, 1320);
+        this.noise(t, 0.8, 0.12, 2400);
+        [988, 1319, 1568].forEach((f, i) => this.tone(f, t + 0.55 + i * 0.07, 0.25, 'sine', 0.06));
+        break;
+      case 'drop':
+        this.tone(900, t, 0.35, 'sine', 0.08, 260);
+        break;
+      case 'land':
+        this.noise(t, 0.3, 0.45, 500);
+        this.tone(120, t, 0.25, 'sine', 0.2, 55);
+        break;
+      case 'unlock':
+        [523, 659, 784, 1047].forEach((f, i) => this.tone(f, t + i * 0.08, 0.22, 'triangle', 0.12));
         break;
     }
   }

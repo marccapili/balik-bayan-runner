@@ -26,6 +26,10 @@ export class Fx {
   readonly alertMat: StandardMaterial;
   /** "?" shown while a guard searches for a hero it lost. */
   readonly lostMat: StandardMaterial;
+  /** Reduced-effects setting: fewer particles. */
+  reduced = false;
+  private readonly dust: ParticleSystem;
+  readonly sparkTex: DynamicTexture;
 
   constructor(private readonly scene: Scene) {
     const dot = new DynamicTexture('sparkTex', { width: 64, height: 64 }, scene, false);
@@ -38,6 +42,7 @@ export class Fx {
     ctx.fillRect(0, 0, 64, 64);
     dot.hasAlpha = true;
     dot.update();
+    this.sparkTex = dot;
     for (let i = 0; i < 4; i++) {
       const ps = new ParticleSystem(`burst${i}`, 40, scene);
       ps.particleTexture = dot;
@@ -59,6 +64,30 @@ export class Fx {
       this.systems.push(ps);
     }
 
+    // Landing dust: soft, normal-blended puffs that spread sideways along the floor.
+    const dust = (this.dust = new ParticleSystem('dust', 60, scene));
+    dust.particleTexture = dot;
+    dust.emitter = new Vector3();
+    dust.createCylinderEmitter(0.35, 0.05, 0.1, 0);
+    dust.minSize = 0.35;
+    dust.maxSize = 0.8;
+    dust.minLifeTime = 0.45;
+    dust.maxLifeTime = 0.9;
+    dust.minEmitPower = 2.2;
+    dust.maxEmitPower = 4;
+    dust.gravity = new Vector3(0, 0.6, 0);
+    dust.color1 = Color4.FromHexString('#f3e6cfcc');
+    dust.color2 = Color4.FromHexString('#d8c3a2bb');
+    dust.colorDead = Color4.FromHexString('#d8c3a200');
+    dust.minScaleX = dust.minScaleY = 1;
+    dust.addSizeGradient(0, 0.5);
+    dust.addSizeGradient(1, 1.4);
+    dust.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+    dust.emitRate = 0;
+    dust.manualEmitCount = 0;
+    dust.updateSpeed = 1 / 60;
+    dust.start();
+
     this.alertMat = signMaterial(scene, 'alert', '!', '#ffd23f');
     this.lostMat = signMaterial(scene, 'lost', '?', '#9fd8ff');
   }
@@ -71,7 +100,13 @@ export class Fx {
     ps.color2 = Color4.FromHexString(`${b}ff`);
     ps.colorDead = Color4.FromHexString(`${b}00`);
     (ps.emitter as Vector3).set(at.x, y, at.z);
-    ps.manualEmitCount = count;
+    ps.manualEmitCount = this.reduced ? Math.ceil(count / 3) : count;
+  }
+
+  /** Ring of floor dust (hero landing). */
+  dustRing(at: Vec2, count = 36): void {
+    (this.dust.emitter as Vector3).set(at.x, 0.1, at.z);
+    this.dust.manualEmitCount = this.reduced ? Math.ceil(count / 3) : count;
   }
 
   /** A billboard sign that follows a guard's head (material swapped between "!" and "?"). */
@@ -86,6 +121,7 @@ export class Fx {
 
   dispose(): void {
     for (const s of this.systems) s.dispose();
+    this.dust.dispose();
   }
 }
 

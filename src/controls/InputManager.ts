@@ -89,6 +89,9 @@ export class InputManager {
   }
 
   private onKey(e: KeyboardEvent, down: boolean): void {
+    // Typing in a text field (nickname) must never move the hero or eat spaces.
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     const dir = KEY_MAP[e.code];
     if (dir) {
       this.held[dir] = down;

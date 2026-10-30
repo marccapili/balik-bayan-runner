@@ -3,36 +3,45 @@ import { Sfx } from '../audio/Sfx';
 import { InputManager } from '../controls/InputManager';
 import { RENDER_CONFIG } from '../data/config';
 import { FEEDBACK } from '../data/gameplay';
-import { HERO_ORDER, type HeroId } from '../data/heroes';
+import type { HeroId } from '../data/heroes';
+import type { IntroEvent } from '../gameplay/IntroSequence';
 import type { RunEvent } from '../gameplay/SurvivalRun';
+import { LobbyScene } from '../scenes/LobbyScene';
 import { MuseumScene } from '../scenes/MuseumScene';
 import { Hud } from '../ui/Hud';
+import { Lobby } from '../ui/Lobby';
+import { Transition } from '../ui/Transition';
 import { SaveManager } from './SaveManager';
 import { GAME_TRANSITIONS, StateMachine, type GameState } from './StateMachine';
 
-/** Owns the engine, the render loop, the active scene and the top-level state machine. */
+/** Owns the engine, the render loop, both scenes and the top-level state machine. */
 export class Game {
   readonly engine: Engine;
   readonly fsm = new StateMachine<GameState>('boot', GAME_TRANSITIONS);
   readonly input: InputManager;
   private museum: MuseumScene | null = null;
+  private lobbyScene: LobbyScene | null = null;
   private hud: Hud | null = null;
-  private heroId: HeroId = 'rizal';
+  private lobby: Lobby | null = null;
+  private transition: Transition | null = null;
   readonly save = new SaveManager();
   readonly sfx = new Sfx();
   /** Total simulated (unpaused) time across runs — used by tests. */
   simTime = 0;
   /** Real seconds left in the knocked-down beat before results appear. */
   private defeatLeft = 0;
+  /** Set by the TAP TO DROP button; consumed by the intro. */
+  private dropRequested = false;
+  private switching = false;
 
   constructor(
-    canvas: HTMLCanvasElement,
+    private readonly canvas: HTMLCanvasElement,
     private readonly uiRoot: HTMLElement,
   ) {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: false, powerPreference: 'high-performance' }, false);
     this.applyPixelRatio();
     this.input = new InputManager(document.getElementById('touch-zone')!);
-    this.sfx.setMuted(this.save.data.muted);
+    this.sfx.setMuted(this.save.data.settings.muted);
 
     window.addEventListener('resize', () => {
       this.applyPixelRatio();
@@ -42,9 +51,7 @@ export class Game {
       if (document.hidden && this.fsm.state === 'playing') this.pause();
     });
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyF' && !e.repeat) this.hud?.toggleFps();
-      const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
-      if (n >= 0 && this.fsm.state === 'playing') this.setHero(HERO_ORDER[n]!);
+      if (e.code === 'KeyF' && !e.repeat && !(e.target instanceof HTMLInputElement)) this.hud?.toggleFps();
     });
   }
 
@@ -53,13 +60,21 @@ export class Game {
     this.engine.setHardwareScalingLevel(1 / dpr);
   }
 
-  /** Boot → build the museum → start playing (lobby & intro arrive in Milestone 3). */
+  get heroId(): HeroId {
+    return this.save.data.selectedHero;
+  }
+
+  /** Boot: build both scenes, then open on the lobby. */
   async start(onProgress: (p: number, label: string) => void): Promise<void> {
-    onProgress(0.2, 'Binubuksan ang museo…');
+    onProgress(0.15, 'Binubuksan ang museo…');
     await nextFrame();
     this.museum = new MuseumScene(this.engine, this.input, this.heroId);
-    onProgress(0.7, 'Ginigising ang mga bayani…');
+    onProgress(0.55, 'Ginigising ang mga bayani…');
     await this.museum.scene.whenReadyAsync();
+    this.lobbyScene = new LobbyScene(this.engine, this.canvas);
+    this.lobbyScene.setHero(this.heroId);
+    onProgress(0.85, 'Inaayos ang lobby…');
+    await this.lobbyScene.scene.whenReadyAsync();
     onProgress(1, 'Game na!');
 
     this.hud = new Hud(this.uiRoot, {
@@ -67,38 +82,179 @@ export class Game {
       onResume: () => this.resume(),
       onRestart: () => this.restart(),
       onReplay: () => this.restart(),
+      onLobby: () => void this.toLobby(),
+      onDrop: () => {
+        this.dropRequested = true;
+      },
       onToggleMute: () => this.toggleMute(),
-      onNextHero: () => this.setHero(HERO_ORDER[(HERO_ORDER.indexOf(this.heroId) + 1) % HERO_ORDER.length]!),
     });
-    this.hud.setHero(this.heroId);
-    this.hud.setMuted(this.sfx.muted);
+    this.lobby = new Lobby(this.uiRoot, this.save, {
+      onPlay: () => void this.play(),
+      onPreview: (id) => this.lobbyScene?.setHero(id),
+      onUnlock: (id) => {
+        const r = this.save.unlockHero(id);
+        if (r === 'ok') this.sfx.play('unlock');
+        return r;
+      },
+      onToggleMute: () => this.toggleMute(),
+      onToggleReduced: () => {
+        this.save.data.settings.reducedEffects = !this.save.data.settings.reducedEffects;
+        this.save.save();
+        this.applySettings();
+      },
+      onReset: () => {
+        this.save.reset();
+        this.applySettings();
+        this.lobbyScene?.setHero(this.heroId);
+      },
+      onClick: () => this.sfx.play('click'),
+    });
+    this.transition = new Transition(this.uiRoot);
+    this.applySettings();
     this.museum.onRoomChange = (r) => this.hud?.showRoom(`📍 ${r.sign}`, r.subtitle);
     this.museum.onEvent = (e) => this.onRunEvent(e);
-    if (new URLSearchParams(location.search).has('peaceful')) this.museum.run.peaceful = true;
+    const q = new URLSearchParams(location.search);
+    if (q.has('peaceful')) this.museum.run.peaceful = true;
 
-    this.fsm.transition('playing');
+    this.fsm.transition('lobby');
+    this.showLobby();
     this.engine.runRenderLoop(() => this.frame());
+    // Test/dev shortcut: jump straight into a run (no lobby, no cinematic).
+    if (q.has('play')) this.quickStart();
+  }
+
+  private applySettings(): void {
+    const s = this.save.data.settings;
+    this.sfx.setMuted(s.muted);
+    this.hud?.setMuted(s.muted);
+    if (this.museum) this.museum.reducedEffects = s.reducedEffects;
+    document.body.classList.toggle('reduced-fx', s.reducedEffects);
+  }
+
+  private showLobby(): void {
+    document.body.dataset.mode = 'lobby';
+    this.hud?.setMode('off');
+    this.lobby?.setVisible(true);
+    if (this.lobbyScene) {
+      this.lobbyScene.active = true;
+      this.lobbyScene.setHero(this.heroId);
+    }
+  }
+
+  private showMuseum(): void {
+    document.body.dataset.mode = 'museum';
+    this.lobby?.setVisible(false);
+    if (this.lobbyScene) this.lobbyScene.active = false;
+    this.museum?.setHero(this.heroId);
+  }
+
+  /** PLAY: lobby slides out → portal wipe → museum reveal with the hero hovering. */
+  async play(): Promise<void> {
+    if (this.switching || this.fsm.state !== 'lobby' || !this.museum) return;
+    this.switching = true;
+    this.sfx.play('portal');
+    this.lobby?.playOut();
+    await this.transition?.cover();
+    this.showMuseum();
+    this.beginIntro();
+    await this.transition?.reveal();
+    this.switching = false;
+  }
+
+  private beginIntro(): void {
+    if (!this.museum || !this.fsm.transition('intro')) return;
+    this.input.releaseAll();
+    this.dropRequested = false;
+    this.defeatLeft = 0;
+    this.hud?.hideResults();
+    this.hud?.setPaused(false);
+    this.hud?.setMode('intro');
+    this.museum.startIntro();
+    this.pushStats();
+  }
+
+  /** Skip lobby + cinematic (used by automated movement tests via ?play). */
+  quickStart(): void {
+    if (!this.museum) return;
+    this.showMuseum();
+    this.museum.resetRun();
+    this.hud?.setMode('play');
+    if (this.fsm.state === 'lobby') this.fsm.transition('intro');
+    this.fsm.transition('playing');
+    this.pushStats();
+  }
+
+  /** Results / pause → portal wipe → lobby. */
+  async toLobby(): Promise<void> {
+    if (this.switching || !this.fsm.can('lobby')) return;
+    this.switching = true;
+    this.input.releaseAll();
+    await this.transition?.cover();
+    this.fsm.transition('lobby');
+    this.defeatLeft = 0;
+    this.hud?.hideResults();
+    this.hud?.setPaused(false);
+    this.museum?.resetRun();
+    this.showLobby();
+    await this.transition?.reveal();
+    this.switching = false;
   }
 
   private frame(): void {
     // Clamp dt so a tab switch or GC hitch never teleports the hero through a wall.
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 1 / 20);
+    const state = this.fsm.state;
     if (this.input.consume('pause')) {
-      if (this.fsm.state === 'playing') this.pause();
-      else if (this.fsm.state === 'paused') this.resume();
+      if (state === 'playing') this.pause();
+      else if (state === 'paused') this.resume();
+      else if (state === 'lobby') this.lobby?.closePanel();
     }
-    if (this.fsm.state === 'playing' && this.museum) {
+    if (state === 'lobby') {
+      this.lobbyScene?.update(dt);
+    } else if (state === 'intro' && this.museum) {
+      const mv = this.input.move;
+      const drop = this.dropRequested || this.input.consume('confirm') || this.input.consume('ability') || Math.hypot(mv.x, mv.z) > 0.5;
+      this.dropRequested = false;
+      for (const e of this.museum.updateIntro(dt, drop)) this.onIntroEvent(e);
+    } else if (state === 'playing' && this.museum) {
       this.simTime += dt;
       this.museum.update(dt);
       this.pushStats();
-    } else if (this.fsm.state === 'gameover' && this.museum && this.defeatLeft > 0) {
+    } else if (state === 'gameover' && this.museum && this.defeatLeft > 0) {
       // Slow-mo knockout beat, then the results panel.
       this.museum.updateDefeated(dt * FEEDBACK.gameOverTimeScale);
       this.defeatLeft -= dt;
       if (this.defeatLeft <= 0) this.showResults();
     }
     this.hud?.tickFps(dt);
-    this.museum?.scene.render();
+    if (state === 'lobby' || state === 'boot') this.lobbyScene?.scene.render();
+    else this.museum?.scene.render();
+  }
+
+  private onIntroEvent(e: IntroEvent): void {
+    switch (e) {
+      case 'awaitDrop':
+        this.hud?.showDrop(true);
+        break;
+      case 'drop':
+        this.hud?.showDrop(false);
+        this.sfx.play('drop');
+        break;
+      case 'landed':
+        this.sfx.play('land');
+        break;
+      case 'guardAlert':
+        this.sfx.play('alert');
+        break;
+      case 'chase':
+        if (this.fsm.transition('playing')) {
+          this.hud?.setMode('play');
+          this.pushStats();
+        }
+        break;
+      default:
+        break;
+    }
   }
 
   pause(): void {
@@ -112,23 +268,22 @@ export class Game {
     if (this.fsm.transition('playing')) this.hud?.setPaused(false);
   }
 
-  /** New run from scratch (pause-menu restart and results replay). */
+  /** New run from scratch (pause-menu restart and results replay): straight back into the cinematic. */
   restart(): void {
-    if (!this.museum) return;
-    this.museum.resetRun();
-    this.defeatLeft = 0;
-    this.input.releaseAll();
-    this.hud?.hideResults();
-    this.hud?.setPaused(false);
-    this.fsm.transition('playing');
-    this.pushStats();
+    if (this.switching || !this.museum) return;
+    if (this.fsm.state === 'playing') {
+      // Dev/test path: restart without the intro while already running.
+      this.museum.resetRun();
+      this.pushStats();
+      return;
+    }
+    this.beginIntro();
   }
 
   toggleMute(): void {
-    this.sfx.setMuted(!this.sfx.muted);
-    this.save.data.muted = this.sfx.muted;
+    this.save.data.settings.muted = !this.save.data.settings.muted;
     this.save.save();
-    this.hud?.setMuted(this.sfx.muted);
+    this.applySettings();
     this.sfx.play('click');
   }
 
@@ -182,7 +337,7 @@ export class Game {
   private showResults(): void {
     const run = this.museum?.run;
     if (!run) return;
-    const newBest = this.save.recordRun(run.score.score, run.score.time, run.score.runCoins);
+    const newBest = this.save.recordRun(run.score.score, run.score.time, run.score.runCoins, this.heroId);
     this.hud?.showResults({
       score: run.score.score,
       time: run.score.time,
@@ -205,12 +360,19 @@ export class Game {
     setPeaceful: (p) => {
       if (this.museum) this.museum.run.peaceful = p;
     },
+    addCoins: (n) => {
+      this.save.data.coins += Math.max(0, Math.floor(n));
+      this.save.save();
+      this.lobby?.refresh();
+    },
   };
 
+  /** Selects an owned hero (used by tools/tests; the lobby UI goes through the same save call). */
   setHero(id: HeroId): void {
-    this.heroId = id;
-    this.museum?.player.setHero(id);
-    this.hud?.setHero(id);
+    if (!this.save.selectHero(id)) return;
+    this.museum?.setHero(id);
+    this.lobbyScene?.setHero(id);
+    this.lobby?.refresh();
   }
 
   /** Read-only snapshot for automated browser tests. */
@@ -226,6 +388,10 @@ export class Game {
       guards: run?.guards.map((g) => ({ x: g.pos.x, z: g.pos.z, state: g.state, hunting: g.hunting })),
       coins: run?.pickups.items.filter((i) => i.active).map((i) => ({ kind: i.kind, x: i.pos.x, z: i.pos.z })),
       results: this.hud?.resultsVisible ?? false,
+      introPhase: this.museum?.introPhase ?? null,
+      dropPrompt: this.hud?.dropVisible ?? false,
+      lobbyPanel: this.lobby?.openPanelName ?? null,
+      previewHero: this.lobby?.previewHero,
       save: { ...this.save.data },
       state: this.fsm.state,
       hero: this.heroId,
@@ -245,6 +411,7 @@ export interface DebugHooks {
   teleport(x: number, z: number): void;
   moveGuard(i: number, x: number, z: number): void;
   setPeaceful(p: boolean): void;
+  addCoins(n: number): void;
 }
 
 const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));

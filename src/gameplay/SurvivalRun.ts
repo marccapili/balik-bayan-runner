@@ -51,6 +51,28 @@ export class SurvivalRun {
     this.events = [];
   }
 
+  /**
+   * Intro: puts the first guard on screen (up-screen of the hero, clear line of sight), back turned.
+   * It stays idle until the intro calls `hunt` on it. Counts as the t=0 scheduled guard.
+   */
+  placeIntroGuard(player: Vec2, range: readonly [number, number]): GuardBrain | null {
+    if (this.peaceful) return null;
+    const [lo, hi] = range;
+    const ok = (s: Vec2, strict: boolean): boolean => {
+      const d = Math.hypot(s.x - player.x, s.z - player.z);
+      if (d < lo || d > hi) return false;
+      return !strict || (s.z > player.z + lo * 0.5 && this.sight.lineClear(s, player));
+    };
+    let pool = this.spots.filter((s) => ok(s, true));
+    if (!pool.length) pool = this.spots.filter((s) => ok(s, false));
+    if (!pool.length) pool = [this.spawnSpot(player)];
+    const at = pool[Math.floor(this.rng() * pool.length)]!;
+    const g = new GuardBrain({ ...at }, this.nav, this.sight, this.world, this.spots, this.rng, 0);
+    g.yaw = Math.atan2(at.x - player.x, at.z - player.z); // facing away from the hero
+    this.guards.push(g);
+    return g;
+  }
+
   /** Current chase speed: ramps with run time and is capped. */
   get chaseSpeed(): number {
     return lerp(GUARD.chaseSpeedStart, GUARD.chaseSpeedMax, clamp(this.score.time / GUARD.speedRampSeconds, 0, 1));

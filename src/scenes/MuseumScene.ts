@@ -11,12 +11,16 @@ import { FollowCamera } from '../camera/FollowCamera';
 import { Player } from '../characters/Player';
 import type { InputManager } from '../controls/InputManager';
 import { FEEDBACK, HEALTH, MAX_GUARDS, PICKUPS } from '../data/gameplay';
+import { INTRO } from '../data/lobby';
+import { IntroSequence, type IntroEvent } from '../gameplay/IntroSequence';
+import type { GuardBrain } from '../enemies/GuardBrain';
+import { Portal } from '../world/Portal';
 import type { HeroId } from '../data/heroes';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
 import { GuardView, sightRingMaterial } from '../enemies/GuardView';
 import { SurvivalRun, type RunEvent } from '../gameplay/SurvivalRun';
 import { CollisionWorld } from '../physics/Collision';
-import type { Vec2 } from '../utils/math';
+import { dampAngle, type Vec2 } from '../utils/math';
 import { Fx } from '../world/Fx';
 import { buildMuseum, type MuseumBuild } from '../world/MuseumBuilder';
 import { PickupViews } from '../world/PickupViews';
@@ -36,6 +40,11 @@ export class MuseumScene implements GameScene {
   private readonly guardViews: GuardView[] = [];
   private room: Room | undefined;
   private blinkT = 0;
+  private readonly portal: Portal;
+  private intro: IntroSequence | null = null;
+  private introGuard: GuardBrain | null = null;
+  /** Accessibility: no camera shake, fewer particles. */
+  reducedEffects = false;
   onRoomChange: ((room: Room) => void) | null = null;
   /** Gameplay events after the scene has reacted (HUD + sound hook in here). */
   onEvent: ((e: RunEvent) => void) | null = null;
@@ -87,16 +96,94 @@ export class MuseumScene implements GameScene {
       sh.isPickable = false;
       this.guardViews.push(new GuardView(scene, this.fx, sh, ringMat));
     }
+    this.portal = new Portal(scene, this.fx.sparkTex);
     this.resetRun();
   }
 
   /** Fresh run: hero at spawn, new board, no guards. */
   resetRun(): void {
+    this.intro = null;
+    this.introGuard = null;
+    this.portal.hide();
     this.player.respawn(SPAWN_POINT);
     this.run.reset(SPAWN_POINT);
+    this.cam.zoom = 1;
+    this.cam.lookY = 0.6;
     this.cam.snapTo(SPAWN_POINT);
     for (const v of this.guardViews) v.hide();
     this.pickupViews.sync(this.run.pickups.items, 0);
+    this.room = undefined;
+  }
+
+  setHero(id: HeroId): void {
+    this.player.setHero(id);
+  }
+
+  /** New run that starts with the cinematic: hover under the portal, wait for the drop. */
+  startIntro(): void {
+    this.resetRun();
+    this.fx.reduced = this.reducedEffects;
+    this.intro = new IntroSequence();
+    this.introGuard = this.run.placeIntroGuard(SPAWN_POINT, INTRO.guardDistance);
+    this.portal.open(SPAWN_POINT, INTRO.floatHeight + 1.0, this.reducedEffects);
+    this.cam.zoom = INTRO.revealZoom;
+    this.cam.lookY = INTRO.floatHeight * 0.6;
+    this.cam.snapTo(SPAWN_POINT);
+    this.player.updateIntro(0, INTRO.floatHeight, 'float');
+  }
+
+  get introPhase(): string | null {
+    return this.intro?.phase ?? null;
+  }
+
+  /**
+   * Steps the cinematic. Nothing can hurt the hero here: SurvivalRun is not updated,
+   * so the timer, scoring and damage only start once the Game switches to 'playing'.
+   */
+  updateIntro(dt: number, drop: boolean): IntroEvent[] {
+    const intro = this.intro;
+    if (!intro) return [];
+    const ev = intro.update(dt, drop);
+    const p = this.player.position;
+    for (const e of ev) {
+      if (e === 'drop') this.portal.close();
+      if (e === 'landed') {
+        this.fx.dustRing(p);
+        if (!this.reducedEffects) this.cam.shake(INTRO.landShake, 0.25);
+      }
+      if (e === 'guardAlert') {
+        this.introGuard?.hunt(p);
+        this.guardViews[0]?.flashAlert();
+      }
+    }
+    const ph = intro.phase;
+    const anim = ph === 'reveal' || ph === 'float' ? 'float' : ph === 'fall' ? 'fall' : ev.includes('landed') ? 'land' : 'idle';
+    this.player.updateIntro(dt, intro.heroY, anim, ph === 'reveal' || ph === 'float' ? 0.35 : 0);
+    if (ph === 'fall' || ev.includes('drop')) {
+      // Settle the hero's facing toward the camera as it drops.
+      this.player.motor.state.yaw = dampAngle(this.player.motor.state.yaw, Math.PI, 6, dt);
+    }
+
+    // Guard: back turned until it hears the landing, then turns to look (alert state handles the stare).
+    const g = this.introGuard;
+    if (g) {
+      if (ph === 'notice' && g.state !== 'alert') g.yaw = dampAngle(g.yaw, Math.atan2(p.x - g.pos.x, p.z - g.pos.z), 9, dt);
+      if (g.state === 'alert') g.update(dt, p);
+    }
+
+    // Camera: wide reveal swooping in, look height following the hover/drop.
+    const rt = intro.revealT;
+    const ease = 1 - (1 - rt) ** 3;
+    this.cam.zoom = INTRO.revealZoom + (1 - INTRO.revealZoom) * ease;
+    const wantLook = 0.6 + intro.heroY * 0.6;
+    this.cam.lookY += (wantLook - this.cam.lookY) * Math.min(1, dt * 6);
+    this.portal.update(dt);
+    if (ph === 'done') {
+      this.cam.lookY = 0.6;
+      this.intro = null;
+    }
+    this.syncWorld(dt);
+    return ev;
   }
 
   update(dt: number): void {
@@ -143,7 +230,7 @@ export class MuseumScene implements GameScene {
       case 'hit':
         this.player.hurt(e.dir, HEALTH.knockback);
         this.fx.burst('hit', e.pos, 1.1, 26);
-        this.cam.shake(FEEDBACK.hitShake, FEEDBACK.hitShakeSeconds);
+        if (!this.reducedEffects) this.cam.shake(FEEDBACK.hitShake, FEEDBACK.hitShakeSeconds);
         break;
       case 'alert':
       case 'guardJoined':
@@ -166,6 +253,7 @@ export class MuseumScene implements GameScene {
 
   dispose(): void {
     this.player.dispose();
+    this.portal.dispose();
     for (const v of this.guardViews) v.dispose();
     this.fx.dispose();
     this.museum.dispose();

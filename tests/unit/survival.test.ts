@@ -294,3 +294,23 @@ describe('SurvivalRun (M2 acceptance)', () => {
     expect(run.chaseSpeed).toBe(GUARD.chaseSpeedMax);
   });
 });
+
+describe('Intro guard', () => {
+  const spots = new NavGrid(MUSEUM_BOUNDS, boxes, 1, 0.7).walkableCells();
+  it('stands up-screen of the hero, in sight, back turned, and counts as the first guard', () => {
+    const run = new SurvivalRun(nav, sight, world, spots, seeded(4));
+    const hero = { x: 0, z: 0 };
+    run.reset(hero);
+    const g = run.placeIntroGuard(hero, [6, 8])!;
+    const d = Math.hypot(g.pos.x, g.pos.z);
+    expect(d).toBeGreaterThanOrEqual(6);
+    expect(d).toBeLessThanOrEqual(8);
+    expect(g.pos.z).toBeGreaterThan(0);
+    expect(sight.lineClear(g.pos, hero)).toBe(true);
+    const facing = { x: Math.sin(g.yaw), z: Math.cos(g.yaw) };
+    expect(facing.x * -g.pos.x + facing.z * -g.pos.z).toBeLessThan(0); // looking away
+    g.hunt(hero);
+    run.update(1 / 30, hero);
+    expect(run.guards).toHaveLength(1);
+  });
+});

@@ -1,5 +1,16 @@
 # Development changelog
 
+## M3 Lobby & cinematic intro — 2026-10-30 (awaiting feedback)
+- Game now opens on a home lobby: night-time bahay-na-bato stage (adobe arches, capiz windows, lanterns, banderitas) with the selected hero on a sun-medallion platform. Drag to spin the hero; idle wave emote. Camera framing adapts to portrait/landscape.
+- Lobby UI (every button works): profile chip → nickname + stats; coins/Hiyas wallet; settings (sound, reduced effects, two-tap reset); Heroes panel (select, preview, unlock); Top Runs leaderboard (local, best run per nickname, top 10); ‹ › hero arrows; PLAY (or "🔒 Unlock" when the previewed hero is locked).
+- PLAY → portal wipe → hero floats under a time portal with "TAP TO DROP" (click / tap / Space / WASD). No timer, no damage, guard doesn't move while floating.
+- Drop: hop, gravity fall, landing dust + camera shake. A guard placed 7–8.5 m up-screen turns, shows "!" + alert sound, then hunts. Only then do timer, score and HUD start.
+- Pause menu and results gained "Lobby" buttons; replay goes through the intro again. `?play` skips lobby + intro (dev/testing).
+- Save data v2 (migrates v1): owned/selected hero, nickname, leaderboard, settings.
+- Guard rules (owner request): new guards hunt immediately at any distance; lose range 8, sight 5, hearing 2.5.
+- Tests: 61 unit, 60 browser checks (lobby panels, settings, reset, nickname validation, unlock flow, float-waits-for-input, drop → land → alert → chase, pause/results → lobby, phone touch).
+- Hidden until their milestones: hero abilities (M4), shop/missions/archive/events/achievements (M4–M6).
+
 ## M2 Core survival — 2026-10-30 (awaiting feedback)
 - Security guard: chibi uniform model, patrol → alert ("!" + sound) → chase → search FSM, A* on a 0.5 m nav grid with line-of-sight shortcuts, staggered repaths, guard-guard separation.
 - Difficulty director: guards join at 0/45/90/150 s (max 4), chase speed ramps 4.5 → 5.3 over 4 min (capped). All numbers in `src/data/gameplay.ts`.
