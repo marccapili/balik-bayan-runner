@@ -1,0 +1,391 @@
+:root {
+  --midnight: #0f1430;
+  --midnight-2: #1f2d6b;
+  --gold: #f2c14e;
+  --gold-deep: #c9952f;
+  --red: #c8202b;
+  --blue: #1f3c9e;
+  --cream: #fff6df;
+  --panel: rgba(15, 20, 48, 0.86);
+  --radius: 16px;
+  --font-display: 'Baloo 2', 'Trebuchet MS', system-ui, sans-serif;
+  --font-body: 'Poppins', system-ui, 'Segoe UI', sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--midnight);
+  color: var(--cream);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  touch-action: none;
+}
+
+/* Left half of the screen spawns the floating joystick on touch. */
+#touch-zone {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 55%;
+  height: 100%;
+  touch-action: none;
+  z-index: 2;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* ── Joystick ── */
+.joy-base {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 246, 223, 0.12), rgba(15, 20, 48, 0.35));
+  border: 3px solid rgba(242, 193, 78, 0.65);
+  box-shadow: 0 0 24px rgba(242, 193, 78, 0.25);
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.12s, transform 0.12s;
+  pointer-events: none;
+}
+.joy-base.active {
+  opacity: 1;
+  transform: scale(1);
+}
+.joy-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe7a3, var(--gold) 55%, var(--gold-deep));
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+}
+
+/* ── HUD ── */
+.hud {
+  position: absolute;
+  inset: 0;
+  font-family: var(--font-body);
+}
+.hud-top {
+  position: absolute;
+  top: calc(10px + var(--safe-top));
+  left: calc(12px + var(--safe-left));
+  right: calc(12px + var(--safe-right));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chip,
+.icon-btn,
+.btn {
+  pointer-events: auto;
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: none;
+  color: var(--cream);
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s;
+}
+.chip:active,
+.icon-btn:active,
+.btn:active {
+  transform: scale(0.94);
+}
+.chip:hover,
+.icon-btn:hover,
+.btn:hover {
+  filter: brightness(1.12);
+}
+.chip {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 2px solid rgba(242, 193, 78, 0.55);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.hero-dot {
+  grid-row: span 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  background: #1d1b22;
+}
+.hero-dot[data-hero='lapulapu'] {
+  background: linear-gradient(#c0222a 40%, #c9875a 40%);
+}
+.hero-dot[data-hero='bonifacio'] {
+  background: linear-gradient(#efe6d2 50%, #b3202a 50%);
+}
+.hero-dot[data-hero='gabriela'] {
+  background: linear-gradient(#f4ede0 45%, #8f1d20 45%);
+}
+.hero-name {
+  font-weight: 800;
+  font-size: 16px;
+  line-height: 1.1;
+}
+.chip-sub {
+  font-size: 11px;
+  opacity: 0.7;
+  font-family: var(--font-body);
+}
+.icon-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 2px solid rgba(242, 193, 78, 0.55);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -2px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.fps {
+  font: 600 12px/1 ui-monospace, monospace;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.room-toast {
+  position: absolute;
+  top: calc(70px + var(--safe-top));
+  left: 50%;
+  transform: translate(-50%, -12px);
+  opacity: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 22px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(31, 45, 107, 0.92), rgba(15, 20, 48, 0.92));
+  border: 2px solid var(--gold);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+.room-toast b {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.5px;
+  color: var(--gold);
+}
+.room-toast span {
+  font-size: 12px;
+  opacity: 0.85;
+}
+.room-toast.show {
+  animation: toast 2.2s ease forwards;
+}
+@keyframes toast {
+  0% { opacity: 0; transform: translate(-50%, -12px) scale(0.9); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.04); }
+  20% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+
+.hint {
+  position: absolute;
+  bottom: calc(14px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(15, 20, 48, 0.72);
+  font-size: 13px;
+  white-space: nowrap;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hint b {
+  color: var(--gold);
+}
+.hint-touch {
+  display: none;
+}
+body.touch .hint-desktop,
+.touch-device .hint-desktop {
+  display: none;
+}
+body.touch .hint-touch,
+.touch-device .hint-touch {
+  display: inline;
+}
+
+/* ── Pause ── */
+.pause-menu {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 10, 26, 0.55);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+  animation: fade 0.18s ease;
+}
+.pause-menu[hidden] {
+  display: none;
+}
+.panel {
+  width: min(360px, calc(100vw - 32px));
+  padding: 22px 22px 18px;
+  border-radius: 22px;
+  background: linear-gradient(160deg, #24357a, var(--midnight));
+  border: 3px solid var(--gold);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  animation: pop 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.panel h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: var(--gold);
+}
+.panel p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+.btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 18px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 246, 223, 0.25);
+}
+.btn.primary {
+  background: linear-gradient(180deg, #ffd66b, var(--gold-deep));
+  color: #3a2208;
+  border: none;
+  box-shadow: 0 5px 0 #8a5a14, 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+@keyframes fade {
+  from { opacity: 0; }
+}
+@keyframes pop {
+  from { transform: scale(0.8); opacity: 0; }
+}
+
+/* ── Loading ── */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 40%, #24357a, var(--midnight) 70%);
+  transition: opacity 0.5s ease;
+}
+#loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+.load-card {
+  text-align: center;
+  width: min(420px, 86vw);
+}
+.load-sun {
+  font-size: 64px;
+  color: var(--gold);
+  animation: spin 6s linear infinite;
+  text-shadow: 0 0 30px rgba(242, 193, 78, 0.6);
+}
+.load-card h1 {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 7vw, 46px);
+  margin: 6px 0 18px;
+  line-height: 1;
+  color: var(--cream);
+  text-shadow: 0 4px 0 var(--red);
+}
+.load-card h1 span {
+  color: var(--gold);
+}
+.load-track {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  border: 2px solid rgba(242, 193, 78, 0.5);
+}
+#load-bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold));
+  transition: width 0.3s ease;
+}
+#load-label {
+  font-size: 14px;
+  opacity: 0.85;
+}
+#loading.error #load-label {
+  color: #ffb4b4;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-height: 420px) {
+  .room-toast {
+    top: calc(62px + var(--safe-top));
+  }
+  .room-toast b {
+    font-size: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .load-sun {
+    animation: none;
+  }
+}
