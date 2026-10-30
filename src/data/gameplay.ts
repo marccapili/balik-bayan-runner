@@ -50,16 +50,23 @@ export const GUARD = {
   /** Seconds of run time to go from start to max chase speed (speed is capped, never unbounded). */
   speedRampSeconds: 240,
   acceleration: 22,
-  sightRange: 15,
-  /** Close range where guards "hear" the player even without line of sight. */
-  hearRange: 4.5,
+  /** Re-acquire radius: a patrolling/searching guard spots the hero inside this (needs line of sight). */
+  sightRange: 8,
+  /** Give-up radius: a chasing guard keeps tracking until the hero is farther than this (> sightRange). */
+  loseRange: 14,
+  /** Very close range where guards "hear" the hero even through a wall. */
+  hearRange: 3,
   alertSeconds: 0.7,
-  searchSeconds: 5,
+  /** After losing the hero: walk to the last seen spot, look around this long, then go back to patrol. */
+  searchSeconds: 3.5,
+  searchSpeed: 2.9,
   repathSeconds: 0.4,
   /** After landing a hit the guard staggers so it can't chain hits. */
   hitRecoverSeconds: 1.2,
   contactPadding: 0.05,
-  minSpawnDistance: 14,
+  /** New guards appear in this distance band: out of reach, but inside loseRange so they start chasing. */
+  minSpawnDistance: 9,
+  maxSpawnDistance: 12,
 } as const;
 
 /** Data-driven difficulty: when each extra guard joins (seconds). Dogs/folklore arrive in M5. */

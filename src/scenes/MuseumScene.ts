@@ -13,7 +13,7 @@ import type { InputManager } from '../controls/InputManager';
 import { FEEDBACK, HEALTH, MAX_GUARDS, PICKUPS } from '../data/gameplay';
 import type { HeroId } from '../data/heroes';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
-import { GuardView } from '../enemies/GuardView';
+import { GuardView, sightRingMaterial } from '../enemies/GuardView';
 import { SurvivalRun, type RunEvent } from '../gameplay/SurvivalRun';
 import { CollisionWorld } from '../physics/Collision';
 import type { Vec2 } from '../utils/math';
@@ -80,11 +80,12 @@ export class MuseumScene implements GameScene {
     shadowMat.useAlphaFromDiffuseTexture = true;
     shadowMat.disableLighting = true;
     shadowMat.emissiveColor = Color3.Black();
+    const ringMat = sightRingMaterial(scene);
     for (let i = 0; i < MAX_GUARDS; i++) {
       const sh = CreateGround(`guardShadow${i}`, { width: 1.2, height: 1.2 }, scene);
       sh.material = shadowMat;
       sh.isPickable = false;
-      this.guardViews.push(new GuardView(scene, this.fx, sh));
+      this.guardViews.push(new GuardView(scene, this.fx, sh, ringMat));
     }
     this.resetRun();
   }

@@ -80,11 +80,13 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   // Run west into the bench at x = -6.5 (east face at -6.1) from the spawn row.
   await page.evaluate(() => window.__bbr.restart());
   await wait(200);
+  // "Stuck" = no progress across 3 polls (a single slow CPU frame must not count).
   let lx = 1;
+  let still = 0;
   const s2 = await holdUntil(page, ['ArrowLeft'], (s) => {
-    const stuck = Math.abs(s.x - lx) < 0.001 && s.x < -4;
+    still = Math.abs(s.x - lx) < 0.001 && s.x < -4 ? still + 1 : 0;
     lx = s.x;
-    return stuck;
+    return still >= 3;
   });
   check('bench blocks movement (no clipping)', s2.x > -6.1 && s2.x < -5.3, `x = ${s2.x.toFixed(2)}`);
 
@@ -92,10 +94,11 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await page.evaluate(() => window.__bbr.restart());
   await holdUntil(page, ['KeyD'], (s) => s.x > 3);
   let last = -1;
+  still = 0;
   const s3 = await holdUntil(page, ['KeyW'], (s) => {
-    const stuck = Math.abs(s.z - last) < 0.001 && s.z > 20;
+    still = Math.abs(s.z - last) < 0.001 && s.z > 20 ? still + 1 : 0;
     last = s.z;
-    return stuck;
+    return still >= 3;
   }, 25000);
   check('outer wall stops hero', s3.z < 23.3 && s3.z > 22.5, `z = ${s3.z.toFixed(2)}`);
   await page.screenshot({ path: `${OUT}/desktop-north.png` });
@@ -151,10 +154,31 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const dist = (s) => (s.guards[0] ? Math.hypot(s.guards[0].x - s.x, s.guards[0].z - s.z) : NaN);
   const g0 = await until((s) => s.guards.length >= 1);
   const d0 = dist(g0);
-  check('a guard spawns at run start, far from the hero', g0.guards.length === 1 && d0 >= 13.9, `d=${d0.toFixed(1)}`);
-  const g1 = await until((s) => dist(s) < d0 - 4 || s.hearts < 3);
-  check('guard pursues the hero', dist(g1) < d0 - 4 || g1.hearts < 3, `d ${d0.toFixed(1)} → ${dist(g1).toFixed(1)}`);
+  check('a guard spawns at run start, far from the hero', g0.guards.length === 1 && d0 >= 8.9 && d0 <= 12.1, `d=${d0.toFixed(1)}`);
+  const g1 = await until((s) => dist(s) < d0 - 3 || s.hearts < 3);
+  check('guard pursues the hero', dist(g1) < d0 - 3 || g1.hearts < 3, `d ${d0.toFixed(1)} → ${dist(g1).toFixed(1)}`);
   await page.screenshot({ path: `${OUT}/m2-chase.png` });
+
+  // Outrun: put the hero beyond loseRange → guard gives up ("?") and goes back to patrol.
+  await page.evaluate(() => {
+    const b = window.__bbr;
+    const g = b.museum.run.guards[0];
+    b.debug.teleport(g.pos.x > 0 ? -24 : 24, g.pos.z > 0 ? -20 : 20);
+  });
+  const lost = await until((s) => s.guards[0]?.state === 'search', 8000);
+  check('outrunning past the lose range stops the chase', lost.guards[0]?.state === 'search', `d=${dist(lost).toFixed(1)}`);
+  await page.screenshot({ path: `${OUT}/m2-lost.png` });
+  const pat = await until((s) => s.guards[0]?.state === 'patrol' || s.guards[0]?.state === 'alert', 20000);
+  check('guard returns to patrol after searching', pat.guards[0]?.state === 'patrol' || pat.guards[0]?.state === 'alert', pat.guards[0]?.state);
+  await page.screenshot({ path: `${OUT}/m2-patrol.png` });
+  // Walk into its sight range → it spots the hero again.
+  await page.evaluate(() => {
+    const b = window.__bbr;
+    const g = b.museum.run.guards[0];
+    b.debug.teleport(g.pos.x + 2.5, g.pos.z);
+  });
+  const re = await until((s) => s.guards[0]?.state === 'alert' || s.guards[0]?.state === 'chase', 8000);
+  check('entering sight range restarts the chase', re.guards[0]?.state === 'alert' || re.guards[0]?.state === 'chase', re.guards[0]?.state);
 
   // Coins: stand on the nearest coin.
   const c = g1.coins.filter((k) => k.kind === 'coin').sort((a, b) => Math.hypot(a.x - g1.x, a.z - g1.z) - Math.hypot(b.x - g1.x, b.z - g1.z))[0];

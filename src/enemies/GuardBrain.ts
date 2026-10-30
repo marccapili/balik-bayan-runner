@@ -7,7 +7,9 @@ export type GuardState = 'patrol' | 'alert' | 'chase' | 'search' | 'stunned';
 
 /**
  * Security guard AI (engine-free).
- * patrol → (sees/hears hero) alert → chase → (loses sight) search → patrol.
+ * patrol → (hero inside sightRange with line of sight, or within hearRange) alert → chase
+ * → (hero farther than loseRange) search last seen spot → patrol.
+ * loseRange > sightRange, so outrunning a guard takes real distance, and it re-spots you only when close.
  * stunned can interrupt anything (hit recovery now; Bonifacio's shockwave in M4).
  */
 export class GuardBrain {
@@ -65,10 +67,20 @@ export class GuardBrain {
     this.justAlerted = true;
   }
 
-  canSense(player: Vec2): boolean {
-    const d = Math.hypot(player.x - this.pos.x, player.z - this.pos.z);
+  private dist(p: Vec2): number {
+    return Math.hypot(p.x - this.pos.x, p.z - this.pos.z);
+  }
+
+  /** Can a non-chasing guard spot the hero right now? */
+  canSee(player: Vec2): boolean {
+    const d = this.dist(player);
     if (d <= GUARD.hearRange) return true;
     return d <= GUARD.sightRange && this.sight.lineClear(this.pos, player);
+  }
+
+  /** A chasing guard keeps tracking (A* around walls) until the hero escapes past loseRange. */
+  stillTracking(player: Vec2): boolean {
+    return this.dist(player) <= GUARD.loseRange;
   }
 
   update(dt: number, player: Vec2): void {
@@ -80,14 +92,14 @@ export class GuardBrain {
     switch (this.state) {
       case 'stunned':
         this.stunFor -= dt;
-        if (this.stunFor <= 0) this.enter(this.canSense(player) ? 'chase' : 'search');
+        if (this.stunFor <= 0) this.enter(this.stillTracking(player) ? 'chase' : 'search');
         break;
       case 'patrol': {
-        if (this.canSense(player)) {
+        if (this.canSee(player)) {
           this.alertTo(player);
           break;
         }
-        if (!this.patrolTarget || Math.hypot(this.patrolTarget.x - this.pos.x, this.patrolTarget.z - this.pos.z) < 0.6) {
+        if (!this.patrolTarget || this.dist(this.patrolTarget) < 0.6) {
           this.patrolTarget = this.patrolPoints[Math.floor(this.rng() * this.patrolPoints.length)] ?? null;
           this.path = [];
           this.repathIn = 0;
@@ -102,30 +114,30 @@ export class GuardBrain {
         if (this.stateTime >= GUARD.alertSeconds) this.enter('chase');
         break;
       case 'chase':
-        if (this.canSense(player)) {
+        if (this.stillTracking(player)) {
           this.lastSeen = { ...player };
-          target = player;
-        } else {
-          this.enter('search');
-          target = this.lastSeen;
-        }
-        speed = this.chaseSpeed;
-        break;
-      case 'search':
-        if (this.canSense(player)) {
-          this.lastSeen = { ...player };
-          this.enter('chase');
           target = player;
           speed = this.chaseSpeed;
+        } else {
+          this.enter('search');
+        }
+        break;
+      case 'search':
+        // Lost the hero: jog to where they were last seen, look around, then give up.
+        if (this.canSee(player)) {
+          this.alertTo(player);
           break;
         }
-        target = this.lastSeen;
-        speed = this.chaseSpeed * 0.75;
-        if (this.lastSeen && Math.hypot(this.lastSeen.x - this.pos.x, this.lastSeen.z - this.pos.z) < 0.8) {
-          // Reached last known position: sniff toward the hero's real position (keeps pressure on).
-          this.lastSeen = { ...player };
+        if (this.lastSeen && this.dist(this.lastSeen) > 0.8) {
+          target = this.lastSeen;
+          speed = GUARD.searchSpeed;
+        } else {
+          this.yaw += dt * 2.2; // looking around
         }
-        if (this.stateTime > GUARD.searchSeconds) this.enter('patrol');
+        if (this.stateTime > GUARD.searchSeconds) {
+          this.patrolTarget = null;
+          this.enter('patrol');
+        }
         break;
     }
 

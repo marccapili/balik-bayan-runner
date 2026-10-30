@@ -90,19 +90,22 @@ export class SurvivalRun {
   }
 
   private spawnSpot(player: Vec2): Vec2 {
+    // Prefer the spawn band; fall back to the spot closest to its middle.
+    const mid = (GUARD.minSpawnDistance + GUARD.maxSpawnDistance) / 2;
     let best = this.spots[0]!;
-    let bestD = -1;
-    for (let tries = 0; tries < 60; tries++) {
+    let bestErr = Infinity;
+    for (let tries = 0; tries < 80; tries++) {
       const s = this.spots[Math.floor(this.rng() * this.spots.length)]!;
       const d = Math.hypot(s.x - player.x, s.z - player.z);
-      if (d >= GUARD.minSpawnDistance) return { ...s };
-      if (d > bestD) {
+      if (d >= GUARD.minSpawnDistance && d <= GUARD.maxSpawnDistance) return { ...s };
+      if (Math.abs(d - mid) < bestErr) {
         best = s;
-        bestD = d;
+        bestErr = Math.abs(d - mid);
       }
     }
     return { ...best };
   }
+
 
   private updateGuards(dt: number, player: Vec2): void {
     const reach = PLAYER_CONFIG.radius + GUARD.radius + GUARD.contactPadding;

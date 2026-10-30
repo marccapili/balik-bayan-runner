@@ -134,7 +134,7 @@ describe('PickupField', () => {
 describe('GuardBrain', () => {
   it('alerts, then chases a visible hero and closes the distance', () => {
     const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
-    const hero = { x: 0, z: 2 };
+    const hero = { x: 0, z: -2 };
     g.update(0.05, hero);
     expect(g.state).toBe('alert');
     for (let i = 0; i < 20; i++) g.update(0.05, hero);
@@ -145,13 +145,41 @@ describe('GuardBrain', () => {
   });
   it('navigates around walls into another gallery', () => {
     const g = new GuardBrain({ x: -5, z: 13 }, nav, sight, world, [{ x: 0, z: 0 }], seeded());
-    const hero = { x: -20, z: 9 };
+    const hero = { x: -17, z: 6 };
     g.alertTo(hero);
     for (let i = 0; i < 400; i++) {
       g.update(0.05, hero);
       expect(world.overlaps(g.pos, 0.44)).toBe(false);
     }
-    expect(Math.hypot(hero.x - g.pos.x, hero.z - g.pos.z)).toBeLessThan(1.5);
+    expect(Math.hypot(hero.x - g.pos.x, hero.z - g.pos.z), g.state).toBeLessThan(1.5);
+  });
+  it('gives up once the hero escapes past loseRange, then patrols', () => {
+    const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
+    g.alertTo({ x: 0, z: -6 });
+    for (let i = 0; i < 20; i++) g.update(0.05, { x: 0, z: -6 });
+    expect(g.state).toBe('chase');
+    // Hero teleports beyond loseRange (main hall, far north): chase ends.
+    const far = { x: 0, z: g.pos.z + GUARD.loseRange + 2 };
+    g.update(0.05, far);
+    expect(g.state).toBe('search');
+    for (let i = 0; i < (GUARD.searchSeconds + 0.5) / 0.05; i++) g.update(0.05, far);
+    expect(g.state).toBe('patrol');
+  });
+  it('keeps chasing between sightRange and loseRange (hysteresis)', () => {
+    const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
+    g.alertTo({ x: 0, z: -6 });
+    for (let i = 0; i < 20; i++) g.update(0.05, { x: 0, z: -6 });
+    const mid = { x: 0, z: g.pos.z + (GUARD.sightRange + GUARD.loseRange) / 2 };
+    g.update(0.05, mid);
+    expect(g.state).toBe('chase');
+  });
+  it('a patrolling guard only re-spots the hero inside sightRange', () => {
+    const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
+    expect(g.state).toBe('patrol');
+    g.update(0.05, { x: 0, z: -10 + GUARD.sightRange + 2 });
+    expect(g.state).toBe('patrol');
+    g.update(0.05, { x: 0, z: -10 + GUARD.sightRange - 1 });
+    expect(g.state).toBe('alert');
   });
   it('stun freezes the guard', () => {
     const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
@@ -181,8 +209,11 @@ describe('SurvivalRun (M2 acceptance)', () => {
     const g = run.guards[0]!;
     const d0 = Math.hypot(g.pos.x, g.pos.z);
     expect(d0).toBeGreaterThanOrEqual(GUARD.minSpawnDistance);
-    step(run, 3, hero);
-    expect(Math.hypot(g.pos.x, g.pos.z)).toBeLessThan(d0 - 4);
+    expect(d0).toBeLessThanOrEqual(GUARD.maxSpawnDistance);
+    expect(GUARD.maxSpawnDistance).toBeLessThan(GUARD.loseRange);
+    expect(GUARD.sightRange).toBeLessThan(GUARD.loseRange);
+    step(run, 6, hero); // may route through a doorway first
+    expect(Math.hypot(g.pos.x, g.pos.z), `${g.state} ${JSON.stringify(g.pos)}`).toBeLessThan(d0 - 4);
   });
 
   it('coins raise the score, damage removes one heart at a time, zero hearts ends the run', () => {
