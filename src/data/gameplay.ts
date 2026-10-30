@@ -64,9 +64,9 @@ export const GUARD = {
   /** After landing a hit the guard staggers so it can't chain hits. */
   hitRecoverSeconds: 1.2,
   contactPadding: 0.05,
-  /** New guards appear in this distance band: out of reach, but inside loseRange so they start chasing. */
-  minSpawnDistance: 6,
-  maxSpawnDistance: 7.5,
+  /** New guards appear in this distance band (they hunt from any distance until they get close). */
+  minSpawnDistance: 10,
+  maxSpawnDistance: 18,
 } as const;
 
 /** Data-driven difficulty: when each extra guard joins (seconds). Dogs/folklore arrive in M5. */

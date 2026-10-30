@@ -223,7 +223,7 @@ export class Game {
       score: run?.score.score,
       runCoins: run?.score.runCoins,
       runTime: run?.score.time,
-      guards: run?.guards.map((g) => ({ x: g.pos.x, z: g.pos.z, state: g.state })),
+      guards: run?.guards.map((g) => ({ x: g.pos.x, z: g.pos.z, state: g.state, hunting: g.hunting })),
       coins: run?.pickups.items.filter((i) => i.active).map((i) => ({ kind: i.kind, x: i.pos.x, z: i.pos.z })),
       results: this.hud?.resultsVisible ?? false,
       save: { ...this.save.data },

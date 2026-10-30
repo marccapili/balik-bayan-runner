@@ -181,6 +181,18 @@ describe('GuardBrain', () => {
     g.update(0.05, { x: 0, z: -10 + GUARD.sightRange - 1 });
     expect(g.state).toBe('alert');
   });
+  it('a freshly spawned guard hunts from beyond loseRange, then follows normal rules', () => {
+    const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
+    const far = { x: 0, z: -10 + GUARD.loseRange + 6 };
+    g.hunt(far);
+    for (let i = 0; i < 40; i++) g.update(0.05, far);
+    expect(g.state).toBe('chase');
+    // Once it has closed in, escaping past loseRange makes it give up as usual.
+    for (let i = 0; i < 200 && Math.hypot(far.x - g.pos.x, far.z - g.pos.z) > GUARD.loseRange - 1; i++) g.update(0.05, far);
+    expect(g.hunting).toBe(false);
+    g.update(0.05, { x: 0, z: g.pos.z - GUARD.loseRange - 3 });
+    expect(g.state).toBe('search');
+  });
   it('stun freezes the guard', () => {
     const g = new GuardBrain({ x: 0, z: -10 }, nav, sight, world, [{ x: 0, z: -10 }], seeded());
     g.alertTo({ x: 0, z: 0 });
@@ -210,7 +222,7 @@ describe('SurvivalRun (M2 acceptance)', () => {
     const d0 = Math.hypot(g.pos.x, g.pos.z);
     expect(d0).toBeGreaterThanOrEqual(GUARD.minSpawnDistance);
     expect(d0).toBeLessThanOrEqual(GUARD.maxSpawnDistance);
-    expect(GUARD.maxSpawnDistance).toBeLessThan(GUARD.loseRange);
+    expect(g.state === 'alert' || g.state === 'chase').toBe(true);
     expect(GUARD.sightRange).toBeLessThan(GUARD.loseRange);
     step(run, 6, hero); // may route through a doorway first
     expect(Math.hypot(g.pos.x, g.pos.z), `${g.state} ${JSON.stringify(g.pos)}`).toBeLessThan(d0 - 4);

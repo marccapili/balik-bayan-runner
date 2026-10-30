@@ -154,12 +154,16 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const dist = (s) => (s.guards[0] ? Math.hypot(s.guards[0].x - s.x, s.guards[0].z - s.z) : NaN);
   const g0 = await until((s) => s.guards.length >= 1);
   const d0 = dist(g0);
-  check('a guard spawns at run start, far from the hero', g0.guards.length === 1 && d0 >= 5.9 && d0 <= 7.6, `d=${d0.toFixed(1)}`);
+  check('a guard spawns at run start, far from the hero', g0.guards.length === 1 && d0 >= 9.9 && d0 <= 18.1, `d=${d0.toFixed(1)}`);
   const g1 = await until((s) => dist(s) < d0 - 2 || s.hearts < 3);
   check('guard pursues the hero', dist(g1) < d0 - 2 || g1.hearts < 3, `d ${d0.toFixed(1)} → ${dist(g1).toFixed(1)}`);
   await page.screenshot({ path: `${OUT}/m2-chase.png` });
 
   // Outrun: put the hero beyond loseRange → guard gives up ("?") and goes back to patrol.
+  // (A fresh guard hunts from any distance; let it close in first so normal rules apply.)
+  const s5 = await snap(page);
+  await page.evaluate(([x, z]) => window.__bbr.debug.moveGuard(0, x + 4, z), [s5.x, s5.z]);
+  await until((s) => s.guards[0] && !s.guards[0].hunting, 5000);
   await page.evaluate(() => {
     const b = window.__bbr;
     const g = b.museum.run.guards[0];

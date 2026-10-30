@@ -83,7 +83,7 @@ export class SurvivalRun {
     while (this.guards.length < Math.min(due, MAX_GUARDS)) {
       const i = this.guards.length;
       const g = new GuardBrain(this.spawnSpot(player), this.nav, this.sight, this.world, this.spots, this.rng, i * 0.1);
-      g.alertTo(player);
+      g.hunt(player);
       this.guards.push(g);
       this.events.push({ type: 'guardJoined', guard: i });
     }

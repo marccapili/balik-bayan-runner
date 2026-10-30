@@ -60,7 +60,19 @@ export class GuardBrain {
     this.enter('stunned');
   }
 
-  /** Forces the guard straight into pursuit (used at run start). */
+  /**
+   * Freshly spawned guards hunt the hero from any distance. The normal give-up rule only
+   * applies once the guard has closed to within loseRange at least once.
+   */
+  hunting = false;
+
+  /** Spawn entry: straight into pursuit, ignoring distance until it gets close. */
+  hunt(player: Vec2): void {
+    this.hunting = true;
+    this.alertTo(player);
+  }
+
+  /** Forces the guard straight into pursuit. */
   alertTo(player: Vec2): void {
     this.lastSeen = { ...player };
     this.enter('alert');
@@ -80,7 +92,9 @@ export class GuardBrain {
 
   /** A chasing guard keeps tracking (A* around walls) until the hero escapes past loseRange. */
   stillTracking(player: Vec2): boolean {
-    return this.dist(player) <= GUARD.loseRange;
+    const inRange = this.dist(player) <= GUARD.loseRange;
+    if (inRange) this.hunting = false;
+    return inRange || this.hunting;
   }
 
   update(dt: number, player: Vec2): void {
