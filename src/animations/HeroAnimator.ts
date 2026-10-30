@@ -70,7 +70,7 @@ export class HeroAnimator {
 
       // Trailing cloth: lifts back with speed + small flap.
       for (const f of r.flutter) {
-        f.rotation.x = -clamp(m, 0, 1.2) * 0.55 + Math.sin(this.phase * 2 + 1) * 0.08 * m - Math.sin(this.time * 2) * 0.03 * idle;
+        f.rotation.x = clamp(m, 0, 1.2) * 0.5 + Math.sin(this.phase * 2 + 1) * 0.08 * m + Math.sin(this.time * 2) * 0.03 * idle;
       }
     } else if (this.state === 'fall') {
       // Arms up, legs tucked — used by the intro drop in M3.
@@ -79,7 +79,7 @@ export class HeroAnimator {
       r.armR.rotation.set(-2.6 - wob, 0, 0.4);
       r.legL.rotation.x = -0.4;
       r.legR.rotation.x = 0.2;
-      for (const f of r.flutter) f.rotation.x = 0.7;
+      for (const f of r.flutter) f.rotation.x = -0.6;
     } else if (this.state === 'land') {
       const t = clamp(this.stateTime / 0.35, 0, 1);
       const squash = Math.sin(t * Math.PI) * 0.18;

@@ -5,7 +5,7 @@ Implemented
 - Vite + TS strict + Babylon.js 9 project, pinned versions, GitHub Pages workflow.
 - Game loop with clamped delta time, central `StateMachine`, pause/resume (Esc / P / on-screen button, auto-pause on tab hide).
 - Data-driven low-poly museum: Main Gallery, Silid-Aklatan (library), Hall of Heroes, Artifacts, Folklore; 5-unit doorways and looping routes; landmarks (sun monument, balangay-inspired boat, burial-jar case, balete tree).
-- Procedural chibi models for Rizal, Lapu-Lapu, Bonifacio, Gabriela Silang matching the supplied sheets (interim art).
+- Procedural chibi models for Rizal, Lapu-Lapu, Bonifacio, Gabriela Silang matching the supplied sheets (interim art): canvas-painted anime faces, clumped hair, rim lighting, costume details (tattoos, beads, tapis/bahag patterns, embroidery). Lapu-Lapu has no sword (owner request).
 - Procedural animation: idle breathing, walk→run blend driven by distance travelled, trailing cloth/hair/headband.
 - PlayerMotor: acceleration, deceleration, turn-brake, normalised diagonals, slide-along-wall collision with sub-stepping.
 - Fixed-angle (52°) follow camera with look-ahead, frame-rate independent smoothing, wall/tree fade when blocking the hero, portrait FOV adaptation, shake API.
