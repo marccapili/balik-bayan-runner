@@ -5,6 +5,7 @@ import { RENDER_CONFIG } from '../data/config';
 import { FEEDBACK } from '../data/gameplay';
 import { ABILITIES } from '../data/abilities';
 import { ENEMY_INTRO, type EnemyKind } from '../data/enemies';
+import { EXHIBIT_CONFIG, type Exhibit } from '../data/exhibits';
 import { HEROES, type HeroId } from '../data/heroes';
 import { describe } from '../gameplay/Missions';
 import type { IntroEvent } from '../gameplay/IntroSequence';
@@ -98,6 +99,8 @@ export class Game {
       },
       onAbility: () => this.input.press('ability'),
       onToggleMute: () => this.toggleMute(),
+      onInteract: () => this.input.press('interact'),
+      onCloseExhibit: () => this.closeExhibit(),
     });
     this.lobby = new Lobby(this.uiRoot, this.save, {
       onPlay: () => void this.play(),
@@ -129,6 +132,7 @@ export class Game {
       if (!this.trainingHero) this.hud?.showRoom(`📍 ${r.sign}`, r.subtitle);
     };
     this.museum.onEvent = (e) => this.onRunEvent(e);
+    this.museum.isDiscovered = (id) => this.save.data.discovered.includes(id);
     const q = new URLSearchParams(location.search);
     if (q.has('peaceful')) this.museum.run.peaceful = true;
 
@@ -250,9 +254,12 @@ export class Game {
     // Clamp dt so a tab switch or GC hitch never teleports the hero through a wall.
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 1 / 20);
     const state = this.fsm.state;
+    // Read every frame so a press never lingers into a later state.
+    const interact = this.input.consume('interact');
     if (this.input.consume('pause')) {
       if (state === 'playing') this.pause();
       else if (state === 'paused') this.resume();
+      else if (state === 'reading') this.closeExhibit();
       else if (state === 'lobby') this.lobby?.closePanel();
     }
     if (state === 'lobby') {
@@ -267,9 +274,19 @@ export class Game {
         this.sfx.play('denied');
         this.hud?.abilityDenied();
       }
-      this.simTime += dt;
-      this.museum.update(dt);
-      this.pushStats();
+      const near = this.museum.nearExhibit;
+      if (interact && near) {
+        this.openExhibit(near);
+      } else {
+        this.simTime += dt;
+        this.museum.update(dt);
+        this.pushStats();
+        const n = this.museum.nearExhibit;
+        this.hud?.setExhibitPrompt(n, !!n && this.save.data.discovered.includes(n.id));
+      }
+    } else if (state === 'reading') {
+      // Frozen run (like pause): E / Esc / the button closes the panel.
+      if (interact) this.closeExhibit();
     } else if (state === 'gameover' && this.museum && this.defeatLeft > 0) {
       // Slow-mo knockout beat, then the results panel.
       this.museum.updateDefeated(dt * FEEDBACK.gameOverTimeScale);
@@ -305,6 +322,27 @@ export class Game {
       default:
         break;
     }
+  }
+
+  /** Opens an exhibit: freezes the run, pays the first-read bonus, adds it to the Archive. */
+  private openExhibit(e: Exhibit): void {
+    const run = this.museum?.run;
+    if (!run || !this.fsm.transition('reading')) return;
+    this.input.releaseAll();
+    const points = run.discover(e.id);
+    const isNew = this.save.discover(e.id);
+    this.hud?.setExhibitPrompt(null, false);
+    this.hud?.showExhibit(e, points, isNew);
+    this.sfx.play('page');
+    this.lobby?.refresh();
+  }
+
+  closeExhibit(): void {
+    if (this.fsm.state !== 'reading' || !this.fsm.transition('playing')) return;
+    this.hud?.hideExhibit();
+    this.input.releaseAll();
+    // Never resume straight into a hit from an enemy that was right behind you.
+    this.museum?.run.health.grantInvuln(EXHIBIT_CONFIG.resumeGrace);
   }
 
   pause(): void {
@@ -402,6 +440,12 @@ export class Game {
         hud?.floatText(p.x, p.y, 'BONK! 💫', 'bonus');
         break;
       }
+      case 'discovered':
+        if (e.points > 0) {
+          const p = m.toScreen(m.player.position, 2.4);
+          hud?.floatText(p.x, p.y, `+${e.points} Discovery! 📜`, 'bonus');
+        }
+        break;
       case 'illusion':
       case 'decoyPop':
         this.sfx.play('poof');
@@ -427,7 +471,7 @@ export class Game {
     if (!run) return;
     const s = run.score;
     const rec = this.save.recordRun(
-      { score: s.score, time: s.time, runCoins: s.runCoins, coinsPicked: s.coinsPicked, bestMultiplier: s.bestMultiplier, abilityUses: run.ability.uses },
+      { score: s.score, time: s.time, runCoins: s.runCoins, coinsPicked: s.coinsPicked, bestMultiplier: s.bestMultiplier, abilityUses: run.ability.uses, exhibits: s.discoveries },
       this.heroId,
     );
     this.hud?.showResults({
@@ -497,6 +541,9 @@ export class Game {
       runCoins: run?.score.runCoins,
       runTime: run?.score.time,
       guards: run?.guards.map((g) => ({ kind: g.kind, x: g.pos.x, z: g.pos.z, state: g.state, hunting: g.hunting, canHurt: g.canHurt })),
+      nearExhibit: this.museum?.nearExhibit?.id ?? null,
+      exhibitPrompt: this.hud?.exhibitPromptVisible ?? false,
+      exhibitOpen: this.hud?.exhibitVisible ?? false,
       decoys: run?.decoys.map((d) => ({ x: d.pos.x, z: d.pos.z, ttl: d.ttl })),
       ability: run && { kind: run.ability.kind, ready: run.ability.ready, active: run.ability.active, uses: run.ability.uses, cooldownLeft: run.ability.cooldownLeft },
       shielded: run?.shielded ?? false,

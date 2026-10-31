@@ -2,7 +2,7 @@
  * Tiny synthesised sound effects (Web Audio, no files, no licensing).
  * The AudioContext is created on the first user gesture to satisfy autoplay rules.
  */
-export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim' | 'bark' | 'growl' | 'whoo' | 'neigh' | 'thump' | 'poof';
+export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim' | 'bark' | 'growl' | 'whoo' | 'neigh' | 'thump' | 'poof' | 'page';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -171,6 +171,11 @@ export class Sfx {
       case 'poof':
         this.noise(t, 0.3, 0.25, 4000);
         this.tone(1200, t, 0.25, 'sine', 0.05, 2400);
+        break;
+      case 'page':
+        // Paper rustle + a soft "discovery" chime.
+        this.noise(t, 0.18, 0.18, 5000);
+        [659, 988].forEach((f, i) => this.tone(f, t + 0.08 + i * 0.09, 0.25, 'sine', 0.07));
         break;
       case 'claim':
         [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, t + i * 0.06, 0.2, 'sine', 0.1));

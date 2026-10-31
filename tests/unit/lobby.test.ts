@@ -51,12 +51,12 @@ describe('IntroSequence', () => {
   });
 });
 
-const run = (score: number, time: number, runCoins: number) => ({ score, time, runCoins, coinsPicked: runCoins, bestMultiplier: 1, abilityUses: 0 });
+const run = (score: number, time: number, runCoins: number) => ({ score, time, runCoins, coinsPicked: runCoins, bestMultiplier: 1, abilityUses: 0, exhibits: 0 });
 
 describe('SaveManager v2', () => {
   it('migrates a v1 save (keeps wallet, best, mute)', () => {
     const d = migrate({ version: 1, coins: 42, diamonds: 0, bestScore: 900, bestTime: 61.5, runs: 3, muted: true });
-    expect(d.version).toBe(3);
+    expect(d.version).toBe(4);
     expect(d.coins).toBe(42);
     expect(d.bestScore).toBe(900);
     expect(d.settings.muted).toBe(true);
@@ -70,7 +70,7 @@ describe('SaveManager v2', () => {
     expect(d.ownedHeroes).toEqual(['rizal', 'gabriela']);
     expect(d.selectedHero).toBe('rizal'); // not owned → falls back
     expect(d.leaderboard).toEqual([]);
-    expect(migrate('garbage').version).toBe(3);
+    expect(migrate("garbage").version).toBe(4);
   });
 
   it('unlocks heroes without going negative or charging twice', () => {

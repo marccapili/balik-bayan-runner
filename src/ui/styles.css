@@ -1579,3 +1579,273 @@ body.touch .ab-key {
     display: none;
   }
 }
+
+/* ── M6 History exhibits + Archive ── */
+.exhibit-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: calc(60px + var(--safe-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 8px 10px;
+  border-radius: 999px;
+  border: 3px solid var(--gold);
+  background: linear-gradient(160deg, #2b3f8f, var(--midnight));
+  color: var(--cream);
+  font: 700 15px/1.15 var(--font-display);
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(242, 193, 78, 0.25), 0 8px 20px rgba(0, 0, 0, 0.4);
+  animation: ep-in 0.22s cubic-bezier(0.2, 1.4, 0.4, 1), ep-glow 1.8s ease-in-out infinite;
+  z-index: 3;
+  max-width: calc(100vw - 24px);
+  text-align: left;
+}
+.exhibit-prompt[hidden] {
+  display: none;
+}
+.exhibit-prompt[data-kind='folklore'] {
+  border-color: #c79bff;
+}
+.exhibit-prompt b {
+  display: inline-block;
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--gold);
+  color: var(--midnight);
+  text-align: center;
+}
+.ep-icon {
+  font-size: 28px;
+}
+.ep-text small {
+  display: block;
+  font: 600 12px/1.2 var(--font-body);
+  opacity: 0.85;
+}
+@keyframes ep-in {
+  from {
+    transform: translateX(-50%) scale(0.6);
+    opacity: 0;
+  }
+}
+@keyframes ep-glow {
+  50% {
+    box-shadow: 0 0 0 7px rgba(242, 193, 78, 0.12), 0 8px 20px rgba(0, 0, 0, 0.4);
+  }
+}
+.reduced-fx .exhibit-prompt {
+  animation: none;
+}
+.hud:not([data-mode='play']):not([data-mode='training']) .exhibit-prompt {
+  display: none;
+}
+.exhibit-panel {
+  z-index: 6;
+}
+.ex-panel {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 16px 18px 12px;
+}
+.ex-status:empty {
+  display: none;
+}
+.ex-status {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.ex-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(159, 226, 255, 0.18);
+  border: 1px solid rgba(159, 226, 255, 0.5);
+  font: 700 13px/1.4 var(--font-display);
+}
+.ex-chip.gold {
+  background: var(--gold);
+  color: var(--midnight);
+  border-color: var(--gold);
+}
+.ex-body {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding-right: 4px;
+}
+.ex-panel > .btn {
+  margin-top: 10px;
+  flex: none;
+}
+.ex-panel > .btn small {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.ex-panel .ex-paused {
+  margin: 6px 0 0;
+  font-size: 12px;
+  text-align: center;
+  opacity: 0.7;
+}
+.exhibit .ex-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.ex-icon {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  font-size: 38px;
+  border-radius: 16px;
+  background: radial-gradient(circle at 40% 30%, #fff3c9, #e7b04a 70%, #a8741f);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15);
+}
+.exhibit[data-kind='folklore'] .ex-icon {
+  background: radial-gradient(circle at 40% 30%, #efe2ff, #9b6bd6 70%, #4a3b66);
+}
+.exhibit[data-kind='artifact'] .ex-icon {
+  background: radial-gradient(circle at 40% 30%, #ffe6cc, #c98a4a 70%, #7a4a1e);
+}
+.exhibit h2 {
+  margin: 0;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1.1;
+  text-align: left;
+}
+.ex-kind {
+  display: inline-block;
+  font: 700 12px/1.3 var(--font-display);
+  color: #9fe2ff;
+}
+.exhibit[data-kind='folklore'] .ex-kind {
+  color: #d9bfff;
+}
+.panel .exhibit .ex-era {
+  margin: 2px 0 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.panel .exhibit .ex-p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.95;
+}
+.panel .exhibit .ex-fact {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(242, 193, 78, 0.14);
+  border-left: 4px solid var(--gold);
+  font-size: 13px;
+  opacity: 1;
+}
+.panel .exhibit .ex-review {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 140, 90, 0.14);
+  border-left: 4px solid #ff8c5a;
+  font-size: 12.5px;
+  opacity: 1;
+}
+.ex-sources {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+.ex-sources ol {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+.ex-sources li {
+  margin-bottom: 3px;
+}
+.panel .ex-fiction {
+  margin: 0;
+  font-size: 11.5px;
+  font-style: italic;
+  opacity: 0.65;
+}
+.ex-back {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.ex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.ex-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px;
+  border-radius: 14px;
+  border: 2px dashed rgba(255, 246, 223, 0.25);
+  background: rgba(8, 10, 26, 0.35);
+  color: var(--cream);
+  text-align: center;
+  font: inherit;
+}
+.ex-tile.found {
+  border: 2px solid rgba(242, 193, 78, 0.7);
+  background: rgba(31, 45, 107, 0.7);
+  cursor: pointer;
+}
+.ex-tile.found[data-kind='folklore'] {
+  border-color: rgba(199, 155, 255, 0.8);
+}
+.ex-tile.found:hover {
+  filter: brightness(1.15);
+}
+.ex-tile-icon {
+  font-size: 28px;
+}
+.ex-tile b {
+  font: 700 14px/1.15 var(--font-display);
+}
+.ex-tile small {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.ex-tile:not(.found) {
+  opacity: 0.7;
+}
+.arch-count {
+  font: 700 11px/1 var(--font-body);
+  color: var(--gold);
+  margin-top: 1px;
+}
+@media (max-height: 420px) {
+  .exhibit-prompt {
+    bottom: calc(10px + var(--safe-bottom));
+    font-size: 13px;
+  }
+  .ep-icon {
+    font-size: 22px;
+  }
+  .ex-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 28px;
+  }
+  .exhibit h2 {
+    font-size: 20px;
+  }
+}

@@ -15,6 +15,8 @@ export class ScoreKeeper {
   combo = 0;
   /** Highest multiplier reached this run (missions). */
   bestMultiplier = 1;
+  /** Exhibits read for the first time this run. */
+  discoveries = 0;
   private comboTimer = 0;
   private bonusesPaid = 0;
   onBonus: ((points: number) => void) | null = null;
@@ -48,6 +50,13 @@ export class ScoreKeeper {
     this.bestMultiplier = Math.max(this.bestMultiplier, this.multiplier);
     this.comboTimer = SCORING.comboWindow;
     return pts;
+  }
+
+  /** First read of an exhibit this run (the run makes sure each exhibit pays once). */
+  discover(): number {
+    this.score += SCORING.artifactDiscovery;
+    this.discoveries++;
+    return SCORING.artifactDiscovery;
   }
 
   /** Taking damage breaks the combo. */

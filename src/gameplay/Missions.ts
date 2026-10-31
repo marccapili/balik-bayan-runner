@@ -21,6 +21,8 @@ export interface RunSummary {
   coinsPicked: number;
   bestMultiplier: number;
   abilityUses: number;
+  /** Exhibits discovered (first read) this run. */
+  exhibits: number;
 }
 
 /** Builds mission number `seq` (deterministic: pool order, scaled up every full cycle). */
@@ -52,6 +54,8 @@ export function describe(m: Mission): string {
       return `Maglaro ng ${m.target} runs`;
     case 'coinsTotal':
       return `Kumuha ng ${m.target} coins (total)`;
+    case 'exhibitsRun':
+      return `Mag-discover ng ${m.target} exhibits sa isang run`;
   }
 }
 
@@ -84,6 +88,9 @@ export function applyRun(missions: Mission[], r: RunSummary): Mission[] {
         break;
       case 'coinsTotal':
         m.progress += r.coinsPicked;
+        break;
+      case 'exhibitsRun':
+        m.progress = Math.max(m.progress, r.exhibits);
         break;
     }
     m.progress = Math.min(m.progress, m.target);

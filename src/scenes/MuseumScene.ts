@@ -17,6 +17,9 @@ import { ABILITIES } from '../data/abilities';
 import { HEROES, type HeroId } from '../data/heroes';
 import { AbilityViews } from '../world/AbilityViews';
 import { TrainingProps } from '../world/TrainingProps';
+import { ExhibitMarkers } from '../world/ExhibitMarkers';
+import type { Exhibit } from '../data/exhibits';
+import { exhibitInReach } from '../history/exhibitMath';
 import { TRAINING } from '../data/training';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
 import { DecoyView, EnemyMaterials, makeEnemyView, type EnemyView } from '../enemies/EnemyViews';
@@ -50,6 +53,11 @@ export class MuseumScene implements GameScene {
   private readonly portal: Portal;
   private readonly abilityViews: AbilityViews;
   private readonly trainingProps: TrainingProps;
+  private readonly exhibitMarkers: ExhibitMarkers;
+  /** Exhibit the hero can read right now (updated while playing). */
+  nearExhibit: Exhibit | null = null;
+  /** Whether an exhibit is already in the Archive (markers turn blue); set by the Game. */
+  isDiscovered: (id: string) => boolean = () => false;
   private intro: IntroSequence | null = null;
   private introGuard: GuardBrain | null = null;
   /** Accessibility: no camera shake, fewer particles. */
@@ -101,6 +109,7 @@ export class MuseumScene implements GameScene {
     this.portal = new Portal(scene, this.fx.sparkTex);
     this.abilityViews = new AbilityViews(scene, this.fx.sparkTex);
     this.trainingProps = new TrainingProps(scene);
+    this.exhibitMarkers = new ExhibitMarkers(scene);
     this.resetRun();
   }
 
@@ -120,6 +129,7 @@ export class MuseumScene implements GameScene {
     this.cam.lookY = 0.6;
     this.cam.snapTo(spawn);
     this.releaseViews();
+    this.nearExhibit = null;
     this.pickupViews.sync(this.run.pickups.items, 0);
     this.room = undefined;
   }
@@ -229,6 +239,7 @@ export class MuseumScene implements GameScene {
       this.blinkT = 0;
       this.player.setVisible(true);
     }
+    this.nearExhibit = this.run.over ? null : exhibitInReach(this.player.position);
     this.syncWorld(dt);
 
     const r = roomAt(this.player.position.x, this.player.position.z);
@@ -281,6 +292,7 @@ export class MuseumScene implements GameScene {
     });
     this.pickupViews.sync(this.run.pickups.items, dt);
     if (this.run.training) this.trainingProps.sync(this.run.dummies, dt);
+    this.exhibitMarkers.update(dt, this.nearExhibit, this.isDiscovered);
     const aspect = this.engine.getRenderWidth() / Math.max(1, this.engine.getRenderHeight());
     this.cam.update(this.player.position, this.player.velocity, dt, aspect);
     for (const s of this.museum.spinners) s.rotation.z += dt * 0.6;
@@ -345,6 +357,7 @@ export class MuseumScene implements GameScene {
     this.player.dispose();
     this.portal.dispose();
     this.trainingProps.dispose();
+    this.exhibitMarkers.dispose();
     this.abilityViews.dispose();
     for (const pool of this.viewPool.values()) for (const v of pool) v.dispose();
     for (const d of this.decoyViews) d.dispose();

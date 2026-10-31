@@ -24,6 +24,7 @@ export type RunEvent =
   | { type: 'bonk'; pos: Vec2; guard: number }
   | { type: 'illusion'; pos: Vec2 }
   | { type: 'decoyPop'; pos: Vec2 }
+  | { type: 'discovered'; id: string; points: number }
   | { type: 'ability'; kind: AbilityKind; pos: Vec2; dir: Vec2; affected: number }
   | { type: 'blocked'; pos: Vec2; guard: number }
   | { type: 'dead' };
@@ -66,6 +67,8 @@ export class SurvivalRun {
   dummies: Dummy[] = [];
   /** Tikbalang illusion copies currently in play. */
   decoys: Decoy[] = [];
+  /** Exhibits read this run (each pays discovery points once). */
+  readonly read = new Set<string>();
   /** How many SPAWN_SCHEDULE entries have joined (the intro guard is entry 0). */
   private spawned = 0;
   private events: RunEvent[] = [];
@@ -94,6 +97,7 @@ export class SurvivalRun {
     if (training) for (const it of this.pickups.items) it.active = false;
     this.guards.length = 0;
     this.decoys = [];
+    this.read.clear();
     this.spawned = 0;
     this.over = false;
     this.events = [];
@@ -208,6 +212,18 @@ export class SurvivalRun {
     }
     this.queued.push({ type: 'ability', kind: this.ability.kind, pos: { ...player }, dir: { ...facing }, affected });
     return true;
+  }
+
+  /**
+   * The hero opened exhibit `id`. Pays the discovery bonus the first time per run (never in training).
+   * Reading itself happens while the run is frozen, so it can't be used to farm time or coins.
+   */
+  discover(id: string): number {
+    if (this.over || this.read.has(id)) return 0;
+    this.read.add(id);
+    const points = this.training ? 0 : this.score.discover();
+    this.queued.push({ type: 'discovered', id, points });
+    return points;
   }
 
   /** Events raised outside `update` (ability use) are delivered with the next update. */

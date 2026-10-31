@@ -146,7 +146,7 @@ describe('PlayerMotor dash', () => {
 });
 
 describe('Missions', () => {
-  const r = (o: Partial<RunSummary>): RunSummary => ({ score: 0, time: 0, runCoins: 0, coinsPicked: 0, bestMultiplier: 1, abilityUses: 0, ...o });
+  const r = (o: Partial<RunSummary>): RunSummary => ({ score: 0, time: 0, runCoins: 0, coinsPicked: 0, bestMultiplier: 1, abilityUses: 0, exhibits: 0, ...o });
 
   it('run missions keep the best run, total missions add up', () => {
     const ms = [makeMission(0), makeMission(1), makeMission(3)]; // coinsRun 15, abilityTotal 3, runsTotal 3
@@ -177,7 +177,7 @@ describe('Missions', () => {
 describe('SaveManager v3: shop + missions', () => {
   it('migrates a v2 save: keeps progress, adds classic skins and fresh missions', () => {
     const d = migrate({ version: 2, coins: 500, diamonds: 3, ownedHeroes: ['rizal', 'lapulapu'], selectedHero: 'lapulapu' });
-    expect(d.version).toBe(3);
+    expect(d.version).toBe(4);
     expect(d.coins).toBe(500);
     expect(d.selectedHero).toBe('lapulapu');
     expect(d.equippedSkins.lapulapu).toBe('lapulapu.classic');
@@ -225,7 +225,7 @@ describe('SaveManager v3: shop + missions', () => {
     const store = memStore();
     const s = new SaveManager(store);
     const first = s.data.missions[0]!;
-    const rec = s.recordRun({ score: 100, time: 30, runCoins: first.target, coinsPicked: first.target, bestMultiplier: 1, abilityUses: 0 }, 'rizal');
+    const rec = s.recordRun({ score: 100, time: 30, runCoins: first.target, coinsPicked: first.target, bestMultiplier: 1, abilityUses: 0, exhibits: 0 }, 'rizal');
     expect(rec.completedMissions.map((m) => m.seq)).toContain(first.seq);
     expect(s.claimableMissions).toBe(1);
     const coins = s.data.coins;

@@ -1,10 +1,13 @@
 import type { SaveManager, ShopResult, UnlockResult } from '../core/SaveManager';
 import { ABILITIES } from '../data/abilities';
+import { EXHIBIT_BY_ID, EXHIBITS, FICTION_NOTE, KIND_LABEL } from '../data/exhibits';
+import { ROOMS } from '../data/museumLayout';
 import { HERO_ORDER, HEROES, type HeroId } from '../data/heroes';
 import { LEADERBOARD } from '../data/lobby';
 import { EXCHANGE, SKIN_BY_ID, skinsFor } from '../data/skins';
 import { describe, isDone } from '../gameplay/Missions';
 import { formatTime } from '../utils/format';
+import { esc, exhibitHtml } from './exhibitHtml';
 
 export interface LobbyCallbacks {
   /** Start a run with the currently selected (owned) hero. */
@@ -22,7 +25,7 @@ export interface LobbyCallbacks {
   onClick(): void;
 }
 
-type Panel = 'heroes' | 'leaderboard' | 'settings' | 'profile' | 'shop' | 'missions';
+type Panel = 'heroes' | 'leaderboard' | 'settings' | 'profile' | 'shop' | 'missions' | 'archive';
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   const el = root.querySelector<T>(sel);
@@ -30,18 +33,19 @@ const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   return el;
 };
 
-const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const fmt = (n: number): string => n.toLocaleString('en-US');
 
 /**
  * Home lobby overlay (HTML on top of the 3D stage). Only features that already work are shown;
- * archive, events and achievements join in their milestones.
+ * events and achievements join in their milestones.
  */
 export class Lobby {
   private readonly root: HTMLElement;
   private readonly sheet: HTMLElement;
   private preview: HeroId;
   private panel: Panel | null = null;
+  /** Archive: exhibit being read (null = the list). */
+  private reading: string | null = null;
   private resetArmed = 0;
   private toastTimer = 0;
 
@@ -68,6 +72,7 @@ export class Lobby {
       <nav class="lb-side lb-left">
         <button class="side-btn" data-act="heroes"><span>🦸</span>Heroes</button>
         <button class="side-btn" data-act="shop"><span>🛍️</span>Shop</button>
+        <button class="side-btn" data-act="archive"><span>📜</span>Archive<b class="arch-count"></b></button>
       </nav>
       <nav class="lb-side lb-right">
         <button class="side-btn" data-act="leaderboard"><span>🏆</span>Top Runs</button>
@@ -194,6 +199,18 @@ export class Lobby {
         this.refresh();
         break;
       }
+      case 'exhibit':
+        if (this.save.data.discovered.includes(el.dataset.id ?? '')) {
+          this.reading = el.dataset.id ?? null;
+          this.renderPanel();
+          this.sheet.querySelector('.sheet-panel')?.scrollTo(0, 0);
+        }
+        break;
+      case 'archiveBack':
+        this.reading = null;
+        this.renderPanel();
+        break;
+      case 'archive':
       case 'heroes':
       case 'shop':
       case 'missions':
@@ -310,11 +327,13 @@ export class Lobby {
     const badge = $(r, '.badge');
     badge.hidden = claim === 0;
     badge.textContent = String(claim);
+    $(r, '.arch-count').textContent = `${d.discovered.length}/${EXHIBITS.length}`;
     this.renderPanel();
   }
 
   private openPanel(p: Panel): void {
     this.panel = p;
+    this.reading = null;
     this.resetArmed = 0;
     this.sheet.hidden = false;
     this.renderPanel();
@@ -392,6 +411,25 @@ export class Lobby {
           })
           .join('');
         body.innerHTML = `<h2>Missions 🎯</h2><p>Tapusin para sa coins at Hiyas. May bago agad pag na-claim mo.</p>${rows}`;
+        break;
+      }
+      case 'archive': {
+        const open = this.reading ? EXHIBIT_BY_ID[this.reading] : undefined;
+        if (open) {
+          body.innerHTML = `<button class="link ex-back" data-act="archiveBack">‹ Balik sa Archive</button>${exhibitHtml(open)}`;
+          break;
+        }
+        const roomName = (id: string): string => ROOMS.find((r) => r.id === id)?.sign ?? id;
+        const tiles = EXHIBITS.map((e) => {
+          const found = d.discovered.includes(e.id);
+          return found
+            ? `<button class="ex-tile found" data-act="exhibit" data-id="${e.id}" data-kind="${e.kind}">
+                <span class="ex-tile-icon">${e.icon}</span><b>${esc(e.title)}</b><small>${esc(KIND_LABEL[e.kind])}</small></button>`
+            : `<div class="ex-tile" data-kind="${e.kind}"><span class="ex-tile-icon">❔</span><b>???</b><small>Hanapin sa ${esc(roomName(e.room))}</small></div>`;
+        }).join('');
+        body.innerHTML = `<h2>Archive 📜</h2>
+          <p>${d.discovered.length}/${EXHIBITS.length} na-discover. Hanapin ang kumikinang na gem sa museo, lapit ka, tapos <b>E</b> o tap para basahin.</p>
+          <div class="ex-grid">${tiles}</div><p class="ex-fiction">${esc(FICTION_NOTE)}</p>`;
         break;
       }
       case 'leaderboard': {

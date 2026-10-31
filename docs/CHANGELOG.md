@@ -1,5 +1,16 @@
 # Development changelog
 
+## M6 History exhibits & archive — 2026-10-31 (awaiting feedback)
+- 12 exhibits across all five galleries (`src/data/exhibits.ts`): Battle of Mactan, Rizal and the Propaganda Movement, Bonifacio and the Katipunan, Gabriela Silang and the Ilocos revolt (Hall of Heroes); the flag's sun and stars, the Butuan balangay (Main Gallery); Manunggul Jar, Laguna Copperplate Inscription (Artifacts); Baybayin, American and Japanese rule (Library); Tikbalang, the balete and multo (Folklore).
+- Every entry has a source list (NHCP, National Museum, RA 8491, Pigafetta, Schumacher, Agoncillo, Constantino, W. H. Scott, Postma, R. B. Fox, M. D. Ramos). Points that differ between sources are shown in an orange "For verification" box (date/place of the Cry, Gabriela's dates, balangay dating) and the panel gives only what is certain.
+- Folklore entries are labelled "Folklore · alamat, hindi history" and say the game's creature powers are made up. Every panel and the Archive carry the fiction note (time travel, powers and the chase are fiction).
+- In the museum: a spinning gem floats over each exhibit (gold = new, purple = folklore, blue = already in the Archive). Walk up and a "Press E to Discover History" prompt appears (a tappable button on phones); a ring lights up under the exhibit.
+- Reading panel: new `reading` game state, so enemies, timer, score, cooldowns and pickups are frozen exactly like pause. First read of an exhibit in a run pays +250 score (once per exhibit per run, never in training). Closing (E, Esc or the button) gives 1.2 s of grace so you can't be hit the instant you resume.
+- Archive (lobby, left side, shows found/total): found exhibits open the same card; unfound ones show "???" and which gallery to search. Save v4 (migrates v1–v3) stores discoveries.
+- New mission: "Mag-discover ng 2 exhibits sa isang run" (+6 Hiyas), appended to the pool so existing missions don't change.
+- Fix found while testing: the exhibit prompt could sit on top of the pause menu and block its buttons; it now hides while paused.
+- Tests: 110 unit (11 new: content has sources/topics/folklore labels, every exhibit is in its room and reachable from open floor, reach detection, bonus once per run and not in training, reading state, save v4 + migration, exhibit mission), 118 browser checks (prompt, E opens/closes, run frozen while reading, bonus once, prompt click, folklore label, Archive list/detail/reload, phone tap open/close).
+
 ## M5 Enemies & difficulty — 2026-10-31 (awaiting feedback)
 - Difficulty director (`src/data/enemies.ts` → `SPAWN_SCHEDULE`): guard at 0:00 (the intro guard), dog 0:35, guard 1:10, multo 1:40, dog 2:15, tikbalang 2:50, guard 3:40, multo 4:30. Each arrival gets its own toast + sound. Guard chase speed still ramps with run time.
 - Guard dog (aspin in a security vest): faster than guards, shorter sight. When it has a clear line within 6 m it crouches and growls for 0.7 s while a red lane shows where it will lunge; the aim is locked, so stepping sideways dodges it. Lunge ~5.9 m, then it pants for 1.1 s. 3.5 s between lunges.

@@ -1,3 +1,4 @@
+import { EXHIBIT_BY_ID } from '../data/exhibits';
 import { HERO_ORDER, HEROES, type HeroId } from '../data/heroes';
 import { LEADERBOARD } from '../data/lobby';
 import { MISSIONS } from '../data/missions';
@@ -6,7 +7,7 @@ import { applyRun, isDone, makeMission, type Mission, type RunSummary } from '..
 
 /**
  * Versioned local save. v2 adds owned/selected heroes, nickname, local leaderboard and settings;
- * v3 adds skins (owned + equipped per hero) and missions.
+ * v3 adds skins (owned + equipped per hero) and missions; v4 adds the history archive (discovered exhibits).
  * Anything missing, corrupted or from an older version goes through `migrate`.
  */
 export interface LeaderboardEntry {
@@ -25,7 +26,7 @@ export interface Settings {
 }
 
 export interface SaveData {
-  version: 3;
+  version: 4;
   coins: number;
   diamonds: number;
   bestScore: number;
@@ -41,6 +42,8 @@ export interface SaveData {
   missions: Mission[];
   /** Next mission sequence number. */
   missionSeq: number;
+  /** Exhibit ids found so far (the lobby Archive), in discovery order. */
+  discovered: string[];
 }
 
 /** What `recordRun` reports back to the results screen. */
@@ -52,7 +55,7 @@ export interface RunRecord {
 export type ShopResult = 'ok' | 'owned' | 'insufficient' | 'locked';
 
 const KEY = 'bbr.save';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 const isHero = (v: unknown): v is HeroId => typeof v === 'string' && v in HEROES;
 
@@ -63,7 +66,7 @@ const freshMissions = (): Mission[] => Array.from({ length: MISSIONS.active }, (
 
 export function defaultSave(): SaveData {
   return {
-    version: 3,
+    version: 4,
     coins: 0,
     diamonds: 0,
     bestScore: 0,
@@ -78,6 +81,7 @@ export function defaultSave(): SaveData {
     equippedSkins: classicSkins(),
     missions: freshMissions(),
     missionSeq: MISSIONS.active,
+    discovered: [],
   };
 }
 
@@ -139,8 +143,9 @@ export function migrate(raw: unknown): SaveData {
   }
   while (missions.length < MISSIONS.active) missions.push(makeMission(missionSeq++));
   missions = missions.slice(0, MISSIONS.active);
+  const discovered = Array.isArray(r.discovered) ? [...new Set(r.discovered.filter((id): id is string => typeof id === 'string' && id in EXHIBIT_BY_ID))] : [];
   return {
-    version: 3,
+    version: 4,
     coins: num(r.coins),
     diamonds: num(r.diamonds),
     bestScore: num(r.bestScore),
@@ -156,6 +161,7 @@ export function migrate(raw: unknown): SaveData {
     equippedSkins,
     missions,
     missionSeq,
+    discovered,
   };
 }
 
@@ -228,6 +234,14 @@ export class SaveManager {
     const completedMissions = applyRun(d.missions, r).map((m) => ({ ...m }));
     this.save();
     return { newBest: best, completedMissions };
+  }
+
+  /** Adds an exhibit to the archive. Returns true the first time it is ever found. */
+  discover(id: string): boolean {
+    if (!(id in EXHIBIT_BY_ID) || this.data.discovered.includes(id)) return false;
+    this.data.discovered.push(id);
+    this.save();
+    return true;
   }
 
   /** Pays out a completed mission and replaces it with the next one. Returns the reward, or null. */

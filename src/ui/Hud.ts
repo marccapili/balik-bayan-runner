@@ -1,4 +1,6 @@
+import type { Exhibit } from '../data/exhibits';
 import { HEALTH } from '../data/gameplay';
+import { esc, exhibitHtml } from './exhibitHtml';
 import { formatTime } from '../utils/format';
 
 export interface HudCallbacks {
@@ -10,6 +12,9 @@ export interface HudCallbacks {
   onDrop(): void;
   onAbility(): void;
   onToggleMute(): void;
+  /** Exhibit prompt tapped (same as E). */
+  onInteract(): void;
+  onCloseExhibit(): void;
 }
 
 export interface RunStats {
@@ -55,6 +60,9 @@ export class Hud {
   private readonly floats: HTMLElement;
   private readonly hurtFlash: HTMLElement;
   private readonly abilityBtn: HTMLElement;
+  private readonly exPrompt: HTMLElement;
+  private readonly exPanel: HTMLElement;
+  private exPromptId: string | null = null;
   private abilityKey = '';
   private last: RunStats = { hearts: -1, score: -1, coins: -1, time: -1, multiplier: -1 };
   private toastTimer = 0;
@@ -90,6 +98,11 @@ export class Hud {
       <button class="ability-btn" data-act="ability" aria-label="Use ability">
         <span class="ab-icon"></span><span class="ab-name"></span><span class="ab-key">Space</span>
       </button>
+      <button class="exhibit-prompt" data-act="interact" hidden>
+        <span class="ep-icon">📖</span>
+        <span class="ep-text"><span class="hint-desktop">Press <b>E</b> to Discover History</span><span class="hint-touch">Tap para alamin</span>
+        <small class="ep-title"></small></span>
+      </button>
       <div class="room-toast" aria-live="polite"></div>
       <div class="hint">
         <span class="hint-desktop"><b>WASD</b> para tumakbo · <b>Space</b> ability · iwasan ang guard 👮 · <b>Esc</b> pause</span>
@@ -103,6 +116,14 @@ export class Hud {
           <button class="btn" data-act="restart">Ulitin ang run 🔁</button>
           <button class="btn" data-act="mute"><span class="mute-label">Tunog: ON 🔊</span></button>
           <button class="btn" data-act="lobby">Balik sa lobby 🏠</button>
+        </div>
+      </div>
+      <div class="exhibit-panel overlay" hidden>
+        <div class="panel ex-panel" role="dialog" aria-modal="true" aria-label="History exhibit">
+          <div class="ex-status"></div>
+          <div class="ex-body"></div>
+          <button class="btn primary" data-act="closeExhibit">Balik sa takbo ▶ <small class="hint-desktop">(E / Esc)</small></button>
+          <p class="ex-paused">⏸ Naka-pause ang habulan habang nagbabasa ka.</p>
         </div>
       </div>
       <div class="results overlay" hidden>
@@ -136,6 +157,8 @@ export class Hud {
     this.floats = $(this.root, '.floats');
     this.hurtFlash = $(this.root, '.hurt-flash');
     this.abilityBtn = $(this.root, '.ability-btn');
+    this.exPrompt = $(this.root, '.exhibit-prompt');
+    this.exPanel = $(this.root, '.exhibit-panel');
 
     this.root.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
@@ -147,6 +170,8 @@ export class Hud {
       else if (act === 'drop') cb.onDrop();
       else if (act === 'ability') cb.onAbility();
       else if (act === 'mute') cb.onToggleMute();
+      else if (act === 'interact') cb.onInteract();
+      else if (act === 'closeExhibit') cb.onCloseExhibit();
     });
     if (new URLSearchParams(location.search).has('debug')) this.fps.hidden = false;
   }
@@ -162,6 +187,47 @@ export class Hud {
     tag.hidden = mode !== 'training';
     $(tag, '.tt-hero').textContent = trainingHero ? `· ${trainingHero}` : '';
     if (mode !== 'intro') this.showDrop(false);
+    if (mode === 'off' || mode === 'intro') {
+      this.setExhibitPrompt(null, false);
+      this.hideExhibit();
+    }
+  }
+
+  /** Context prompt near an exhibit (null hides it). DOM only changes when the exhibit changes. */
+  setExhibitPrompt(e: Exhibit | null, known: boolean): void {
+    const id = e ? `${e.id}|${known}` : null;
+    if (id === this.exPromptId) return;
+    this.exPromptId = id;
+    this.exPrompt.hidden = !e;
+    if (!e) return;
+    this.exPrompt.dataset.kind = e.kind;
+    $(this.exPrompt, '.ep-icon').textContent = e.icon;
+    $(this.exPrompt, '.ep-title').innerHTML = `${esc(e.title)}${known ? ' · ✓ nasa Archive' : ' · ✨ bago!'}`;
+  }
+
+  get exhibitPromptVisible(): boolean {
+    return !this.exPrompt.hidden;
+  }
+
+  /** Reading panel. `points` > 0 = first read this run; `isNew` = just added to the Archive. */
+  showExhibit(e: Exhibit, points: number, isNew: boolean): void {
+    const status = [
+      points > 0 ? `<span class="ex-chip gold">+${points} Discovery!</span>` : '',
+      isNew ? '<span class="ex-chip">📜 Bago sa Archive!</span>' : '',
+    ].join('');
+    $(this.exPanel, '.ex-status').innerHTML = status;
+    $(this.exPanel, '.ex-body').innerHTML = exhibitHtml(e);
+    this.exPanel.hidden = false;
+    $(this.exPanel, '.ex-body').scrollTop = 0;
+    $(this.exPanel, '[data-act="closeExhibit"]').focus();
+  }
+
+  hideExhibit(): void {
+    this.exPanel.hidden = true;
+  }
+
+  get exhibitVisible(): boolean {
+    return !this.exPanel.hidden;
   }
 
   showDrop(v: boolean): void {
@@ -174,6 +240,8 @@ export class Hud {
 
   setPaused(p: boolean): void {
     this.pauseMenu.hidden = !p;
+    // The prompt sits above the HUD layer; never let it cover the pause menu.
+    if (p) this.setExhibitPrompt(null, false);
     if (p) $(this.pauseMenu, '[data-act="resume"]').focus();
   }
 

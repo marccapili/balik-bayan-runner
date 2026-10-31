@@ -573,6 +573,85 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await ctx.close();
 }
 
+// ── M6 history exhibits: prompt, reading panel pauses the run, discovery bonus once, archive ──
+{
+  const { ctx, page, errors } = await bootPage(browser, { viewport: { width: 1280, height: 720 } }, '?play');
+  const until = async (pred, maxMs = 10000) => {
+    const t0 = Date.now();
+    let s = await snap(page);
+    while (!pred(s) && Date.now() - t0 < maxMs) {
+      await wait(80);
+      s = await snap(page);
+    }
+    return s;
+  };
+  await until((s) => s.guards.length >= 1);
+  // Rizal's statue in the Hall of Heroes: stand just in front of it.
+  await page.evaluate(() => {
+    window.__bbr.debug.setInvulnerable(1e6);
+    window.__bbr.debug.teleport(25, 4.9);
+  });
+  const near = await until((s) => s.exhibitPrompt);
+  check('walking up to an exhibit shows the Discover prompt', near.exhibitPrompt && near.nearExhibit === 'rizal', `near=${near.nearExhibit}`);
+  check('prompt says "Press E to Discover History"', /Press\s*E\s*to Discover History/i.test(await page.textContent('.exhibit-prompt')));
+  await page.screenshot({ path: `${OUT}/m6-prompt.png` });
+  const before = await snap(page);
+  await page.keyboard.press('e');
+  const open = await until((s) => s.state === 'reading', 4000);
+  check('E opens the history panel and freezes the run', open.state === 'reading' && open.exhibitOpen);
+  const panelText = await page.textContent('.exhibit-panel');
+  check('panel shows title, sources and the fiction note', /Propaganda Movement/.test(panelText) && /Sources/.test(panelText) && /Schumacher/.test(panelText) && /Fiction/.test(panelText));
+  check('first read pays the discovery bonus', open.score === before.score + 250 && /\+250 Discovery/.test(panelText), `score ${before.score} → ${open.score}`);
+  await page.screenshot({ path: `${OUT}/m6-panel.png` });
+  await wait(1200);
+  const still = await snap(page);
+  const moved = still.guards.some((g, i) => Math.hypot(g.x - open.guards[i].x, g.z - open.guards[i].z) > 0.01);
+  check('while reading: timer, score and enemies are frozen', still.runTime === open.runTime && still.score === open.score && !moved && still.state === 'reading');
+  await page.keyboard.press('e');
+  const closed = await until((s) => s.state === 'playing', 4000);
+  check('E closes the panel and resumes with a short grace', closed.state === 'playing' && !closed.exhibitOpen && closed.invulnerable);
+  check('the exhibit is saved to the archive', closed.save.discovered.includes('rizal'));
+  // Re-reading the same exhibit in the same run pays nothing; the prompt button works too.
+  await page.click('.exhibit-prompt');
+  const again = await until((s) => s.state === 'reading', 4000);
+  check('clicking the prompt opens the panel too', again.state === 'reading');
+  check('re-reading the same exhibit pays nothing', again.score === closed.score, `${closed.score} → ${again.score}`);
+  await page.keyboard.press('Escape');
+  await until((s) => s.state === 'playing', 4000);
+  // Folklore exhibit is clearly labelled.
+  await page.evaluate(() => window.__bbr.debug.teleport(23.8, -19.5));
+  await until((s) => s.nearExhibit === 'tikbalang');
+  await page.keyboard.press('e');
+  await until((s) => s.state === 'reading', 4000);
+  const folk = await page.textContent('.exhibit-panel');
+  check('folklore exhibit is labelled folklore, not history', /Folklore · alamat, hindi history/.test(folk) && /Ramos/.test(folk));
+  await page.screenshot({ path: `${OUT}/m6-folklore.png` });
+  await page.click('[data-act="closeExhibit"]');
+  await until((s) => s.state === 'playing', 4000);
+  // Archive in the lobby.
+  await page.keyboard.press('Escape');
+  await wait(200);
+  await page.click('.pause-menu [data-act="lobby"]');
+  await until((s) => s.state === 'lobby', 10000);
+  await wait(900);
+  check('Archive button shows discoveries', /2\/\d+/.test(await page.textContent('.arch-count')));
+  await page.click('[data-act="archive"]');
+  await wait(200);
+  check('Archive lists found exhibits and hides the rest', (await page.locator('.ex-tile.found').count()) === 2 && (await page.locator('.ex-tile:not(.found)').count()) > 0);
+  await page.screenshot({ path: `${OUT}/m6-archive.png` });
+  await page.click('.ex-tile.found[data-id="rizal"]');
+  await wait(200);
+  check('tapping a found exhibit opens it in the Archive', /Propaganda Movement/.test(await page.textContent('.sheet-body')));
+  await page.screenshot({ path: `${OUT}/m6-archive-entry.png` });
+  await page.click('[data-act="archiveBack"]');
+  await page.reload();
+  await page.waitForFunction(() => ['lobby', 'playing'].includes(window.__bbr?.fsm.state), null, { timeout: 30000 });
+  const r = await snap(page);
+  check('archive survives a reload', r.save.discovered.length === 2 && r.save.discovered.includes('tikbalang'));
+  check('no console errors (history)', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
 // ── Phone (landscape + portrait) with touch joystick ──
 for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }], ['phone-portrait', { width: 390, height: 844 }]]) {
   const { ctx, page, errors } = await bootPage(browser, { viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
@@ -606,6 +685,17 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await wait(300);
   check(`${label}: ability button works on touch`, (await snap(page)).ability.uses === 1);
   await page.screenshot({ path: `${OUT}/${label}.png` });
+  // Exhibit prompt is a tappable button on phones.
+  await page.evaluate(() => window.__bbr.debug.teleport(-20, -9.4));
+  const tw = Date.now();
+  while (!(await snap(page)).exhibitPrompt && Date.now() - tw < 5000) await wait(80);
+  await page.tap('.exhibit-prompt');
+  await wait(250);
+  check(`${label}: tapping the exhibit prompt opens the panel`, (await snap(page)).state === 'reading');
+  await page.screenshot({ path: `${OUT}/${label}-exhibit.png` });
+  await page.tap('[data-act="closeExhibit"]');
+  await wait(250);
+  check(`${label}: exhibit panel closes on touch`, (await snap(page)).state === 'playing');
   await page.tap('[data-act="pause"]');
   await wait(150);
   await page.tap('.pause-menu [data-act="lobby"]');
