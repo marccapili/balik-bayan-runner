@@ -4,6 +4,7 @@
  * second check is listed in `review` and shown in-game as "for verification".
  * The time travel, hero powers and museum chase are fiction; these panels are not.
  */
+import type { MiniGameKind } from './minigames';
 import type { RoomId } from './museumLayout';
 
 export type ExhibitKind = 'history' | 'artifact' | 'folklore';
@@ -32,6 +33,12 @@ export interface Exhibit {
   sources: string[];
   /** Points still to double-check (shown as "for verification"); omit when none. */
   review?: string;
+  /** M7: the mini-game that unlocks this exhibit. */
+  game: MiniGameKind;
+  /** Display Case Code: the year to enter + the clue shown. */
+  code?: { answer: string; clue: string };
+  /** Timeline Sort: events to put in order (years must differ). */
+  timeline?: { year: number; label: string }[];
 }
 
 export const EXHIBIT_CONFIG = {
@@ -48,6 +55,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Labanan sa Mactan',
     era: 'Battle of Mactan · 27 April 1521',
     icon: '🌊',
+    game: 'navigate',
     at: { x: 16, z: 7 },
     reach: 2.3,
     markerY: 3.0,
@@ -69,6 +77,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'José Rizal at ang Propaganda Movement',
     era: 'Reform campaign · c. 1880–1896',
     icon: '📖',
+    game: 'swipe',
     at: { x: 25, z: 7 },
     reach: 2.3,
     markerY: 3.0,
@@ -90,6 +99,8 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Andrés Bonifacio at ang Katipunan',
     era: 'Revolution · 1892–1897',
     icon: '🔥',
+    game: 'code',
+    code: { answer: '1892', clue: 'Itinatag ni Bonifacio ang Katipunan noong 7 Hulyo ng taong…' },
     at: { x: 16, z: 19 },
     reach: 2.3,
     markerY: 3.0,
@@ -112,6 +123,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Gabriela Silang at ang Pag-aalsa sa Ilocos',
     era: 'Ilocos revolt · 1762–1763',
     icon: '🐎',
+    game: 'wires',
     at: { x: 25, z: 19 },
     reach: 2.3,
     markerY: 3.0,
@@ -134,6 +146,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Ang Araw at Tatlong Bituin',
     era: 'The Philippine flag · 1898',
     icon: '☀️',
+    game: 'restore',
     at: { x: 0, z: 15 },
     reach: 2.9,
     markerY: 1.9,
@@ -156,6 +169,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Balangay ng Butuan',
     era: 'Pre-colonial boats · c. 4th–13th century CE',
     icon: '⛵',
+    game: 'navigate',
     at: { x: 0, z: -15 },
     reach: 3.4,
     markerY: 2.4,
@@ -179,6 +193,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Manunggul Jar',
     era: 'Burial jar · c. 890–710 BCE',
     icon: '🏺',
+    game: 'restore',
     at: { x: -20, z: -12 },
     reach: 2.8,
     markerY: 2.8,
@@ -200,6 +215,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Laguna Copperplate Inscription',
     era: 'Oldest known Philippine document · 900 CE',
     icon: '📜',
+    game: 'dust',
     at: { x: -26, z: -6 },
     reach: 2.4,
     markerY: 2.2,
@@ -221,6 +237,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Baybayin',
     era: 'Pre-colonial script · 16th century records',
     icon: '✍️',
+    game: 'baybayin',
     at: { x: -21, z: 17.5 },
     reach: 2.9,
     markerY: 3.0,
@@ -242,6 +259,13 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Sa Ilalim ng Amerika at Hapon',
     era: 'American and Japanese rule · 1898–1946',
     icon: '🗞️',
+    game: 'timeline',
+    timeline: [
+      { year: 1898, label: 'Treaty of Paris: ibinigay ng Spain sa U.S.' },
+      { year: 1935, label: 'Commonwealth, si Quezon ang presidente' },
+      { year: 1942, label: 'Simula ng pananakop ng Hapon' },
+      { year: 1946, label: 'Kinilala ng U.S. ang kalayaan (4 Hulyo)' },
+    ],
     at: { x: -21, z: 9 },
     reach: 2.6,
     markerY: 1.9,
@@ -256,6 +280,78 @@ export const EXHIBITS: readonly Exhibit[] = [
       'Renato Constantino, The Philippines: A Past Revisited (Tala Publishing, 1975).',
     ],
   },
+  // ── M7 additions ──
+  {
+    id: 'spoliarium',
+    kind: 'history',
+    room: 'heroes',
+    title: 'Spoliarium ni Juan Luna',
+    era: 'Painting · Madrid, 1884',
+    icon: '🖼️',
+    game: 'restore',
+    at: { x: 28.6, z: 13 },
+    reach: 2.4,
+    markerY: 2.3,
+    marker: { x: 27.6, z: 13 },
+    body: [
+      'Spoliarium is a huge oil painting by the Filipino artist Juan Luna (1857–1899). It shows fallen gladiators being dragged into the spoliarium, the room under a Roman arena where the dead were stripped and taken away.',
+      'In 1884 it won a gold medal at the National Exposition of Fine Arts in Madrid. At the same exhibition, Félix Resurrección Hidalgo won a silver medal.',
+      'Their success was celebrated by Filipinos in Madrid, and José Rizal gave a famous toast in their honour, saying that genius has no country. Today the painting hangs in the National Museum of Fine Arts in Manila.',
+    ],
+    fact: 'Isa ito sa pinakamalalaking painting sa Pilipinas: mahigit 4 metro ang taas at halos 8 metro ang lapad.',
+    sources: [
+      'National Museum of the Philippines, National Museum of Fine Arts: Spoliarium (Juan Luna, 1884), collection information.',
+      'José Rizal, "Brindis" (toast to Juan Luna and Félix Resurrección Hidalgo), Madrid, 25 June 1884.',
+    ],
+    review: 'Exact canvas size (often given as about 4.22 × 7.68 m) and how it came back to the Philippines (bought in Barcelona, given to the government in 1958) still need a second check.',
+  },
+  {
+    id: 'rice-terraces',
+    kind: 'artifact',
+    room: 'artifacts',
+    title: 'Hagdan-hagdang Palayan ng Cordillera',
+    era: 'Rice Terraces of the Philippine Cordilleras · UNESCO 1995',
+    icon: '🌾',
+    game: 'wires',
+    at: { x: -14, z: -19 },
+    reach: 2.3,
+    markerY: 2.2,
+    body: [
+      'The rice terraces of Ifugao were carved into steep mountain slopes by Ifugao communities and are still farmed today. Water from the forests above flows down through a shared system of channels to every terrace.',
+      'In 1995 UNESCO listed the Rice Terraces of the Philippine Cordilleras as a World Heritage Site. The listing covers five clusters: Batad, Bangaan, Hungduan, Mayoyao and Nagacadan.',
+      'They were on the List of World Heritage in Danger from 2001 to 2012 because of neglect and abandoned fields, and were removed after conservation work by local communities and the government.',
+    ],
+    fact: 'Ang Hudhud, mga awit-salaysay ng Ifugao, ay kinilala rin ng UNESCO bilang intangible cultural heritage.',
+    sources: [
+      'UNESCO World Heritage Centre, "Rice Terraces of the Philippine Cordilleras" (inscribed 1995, ref. 722).',
+      'Stephen Acabado and the Ifugao Archaeological Project, research on the dating of the Ifugao terraces (2010s).',
+    ],
+    review: 'Their age is debated: the popular "2,000 years old" claim is challenged by recent archaeology suggesting many terraces were built a few centuries ago. The panel avoids giving an age.',
+  },
+  {
+    id: 'edsa',
+    kind: 'history',
+    room: 'library',
+    title: 'EDSA People Power',
+    era: 'Peaceful revolution · 22–25 February 1986',
+    icon: '✌️',
+    game: 'code',
+    code: { answer: '1986', clue: 'Nagtipon ang mga tao sa EDSA noong 22–25 Pebrero ng taong…' },
+    at: { x: -14.5, z: 5 },
+    reach: 2.4,
+    markerY: 1.9,
+    body: [
+      'Ferdinand Marcos ruled from 1965 and placed the country under martial law in 1972. The killing of opposition leader Benigno "Ninoy" Aquino Jr. in August 1983 and a disputed snap election on 7 February 1986 deepened the crisis.',
+      'On 22 February 1986, Defense Minister Juan Ponce Enrile and General Fidel V. Ramos broke away from Marcos. Cardinal Jaime Sin called on people over Radio Veritas to protect them, and huge crowds filled EDSA with prayers, flowers and food for the soldiers.',
+      'On 25 February 1986, Corazon Aquino was sworn in as President, and Marcos and his family left Malacañang for exile in Hawaii. The mostly peaceful uprising became known worldwide as People Power.',
+    ],
+    fact: 'Ang 25 Pebrero ay ginugunita bilang anibersaryo ng EDSA People Power Revolution.',
+    sources: [
+      'Official Gazette of the Republic of the Philippines, "The EDSA Revolution" (historical feature).',
+      'Alfred W. McCoy, Closer Than Brothers: Manhood at the Philippine Military Academy (Yale University Press, 1999), on the 1986 military revolt.',
+    ],
+    review: 'Crowd sizes are estimates that vary widely between sources, so the panel does not give a number.',
+  },
   // ── Folklore (alamat, hindi history) ──
   {
     id: 'tikbalang',
@@ -264,6 +360,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Tikbalang',
     era: 'Folklore · Philippine lower mythology',
     icon: '🐴',
+    game: 'swipe',
     at: { x: 26, z: -19.5 },
     reach: 2.4,
     markerY: 2.9,
@@ -282,6 +379,7 @@ export const EXHIBITS: readonly Exhibit[] = [
     title: 'Ang Balete at ang mga Multo',
     era: 'Folklore · beliefs about spirits',
     icon: '🌳',
+    game: 'dust',
     at: { x: 20, z: -12.5 },
     reach: 2.9,
     markerY: 2.2,

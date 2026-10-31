@@ -1,7 +1,7 @@
 /**
  * Hero ability tuning (M4). Abilities are fictional gameplay interpretations, not historical claims.
- * Cooldowns (owner request 2026-10-31): Rizal 1:30, Lapu-Lapu 1:00; Bonifacio and Gabriela balanced around them —
- * the shockwave hits every nearby guard so it sits between, the dash is the smallest escape so it recharges fastest.
+ * Cooldowns (owner, 2026-10-31): Rizal 1:30, Lapu-Lapu 1:00, Gabriela 0:20; Bonifacio 1:15 balanced between.
+ * Abilities unlock at hero level 5 and get stronger at 7 and 9 (data/progression.ts).
  */
 
 export type AbilityKind = 'sprint' | 'shield' | 'shockwave' | 'dash';
@@ -14,5 +14,5 @@ export const ABILITIES = {
   /** Bonifacio: Sigaw ng Katipunan. Stuns and shoves every guard within the radius. */
   shockwave: { cooldown: 75, duration: 0.6, radius: 5, stun: 2.5, push: 3.5, icon: '📣' },
   /** Gabriela: Matapang na Hakbang. Short burst in the facing direction, untouchable while dashing. */
-  dash: { cooldown: 45, duration: 0.24, speed: 21, invulnerable: 0.4, icon: '💨' },
+  dash: { cooldown: 20, duration: 0.24, speed: 21, invulnerable: 0.4, icon: '💨' },
 } as const;

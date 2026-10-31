@@ -1,8 +1,10 @@
 import type { NavGrid } from '../ai/NavGrid';
 import { ABILITIES, type AbilityKind } from '../data/abilities';
 import { PLAYER_CONFIG } from '../data/config';
-import { SPAWN_SCHEDULE, TIKBALANG, type EnemyKind } from '../data/enemies';
-import { GUARD } from '../data/gameplay';
+import { ENDLESS, SPAWN_SCHEDULE, TIKBALANG, type EnemyKind } from '../data/enemies';
+import { EXHIBITS } from '../data/exhibits';
+import { GUARD, PICKUPS } from '../data/gameplay';
+import { EXHIBIT_REWARDS } from '../data/progression';
 import { TRAINING } from '../data/training';
 import { GuardBrain } from '../enemies/GuardBrain';
 import { DogBrain, LungerBrain, TikbalangBrain } from '../enemies/LungerBrain';
@@ -24,7 +26,9 @@ export type RunEvent =
   | { type: 'bonk'; pos: Vec2; guard: number }
   | { type: 'illusion'; pos: Vec2 }
   | { type: 'decoyPop'; pos: Vec2 }
-  | { type: 'discovered'; id: string; points: number }
+  | { type: 'discovered'; id: string; points: number; coins: number; diamonds: number; cleared: number }
+  | { type: 'endless' }
+  | { type: 'idCard'; pos: Vec2 }
   | { type: 'ability'; kind: AbilityKind; pos: Vec2; dir: Vec2; affected: number }
   | { type: 'blocked'; pos: Vec2; guard: number }
   | { type: 'dead' };
@@ -49,6 +53,28 @@ export interface Decoy {
   spin: number;
 }
 
+/** Hero-level effects on the ability (see gameplay/Progression#heroPerks). */
+export interface AbilityPerks {
+  abilityUnlocked: boolean;
+  cooldownMult: number;
+  boost: number;
+}
+
+const FULL_PERKS: AbilityPerks = { abilityUnlocked: true, cooldownMult: 1, boost: 1 };
+
+/** What clearing one exhibit paid. */
+export interface ExhibitPayout {
+  points: number;
+  coins: number;
+  diamonds: number;
+}
+
+/** Curator ID card for the Card Swipe exhibits: lies somewhere in the museum until picked up. */
+export interface IdCard {
+  pos: Vec2;
+  taken: boolean;
+}
+
 /**
  * One survival run, engine-free: guards, hearts, pickups, score and time.
  * The scene feeds it the hero position each step and renders whatever it reports.
@@ -67,8 +93,16 @@ export class SurvivalRun {
   dummies: Dummy[] = [];
   /** Tikbalang illusion copies currently in play. */
   decoys: Decoy[] = [];
-  /** Exhibits read this run (each pays discovery points once). */
+  /** Exhibits cleared this run (mini-game won; each pays once). */
   readonly read = new Set<string>();
+  /** All exhibits cleared: difficulty now climbs fast until the hero is caught. */
+  endless = false;
+  endlessTime = 0;
+  private endlessSpawned = 0;
+  idCard: IdCard | null = null;
+  /** Mini-games won this run (daily tasks). */
+  gamesWon = 0;
+  readonly exhibitTotal = EXHIBITS.length;
   /** How many SPAWN_SCHEDULE entries have joined (the intro guard is entry 0). */
   private spawned = 0;
   private events: RunEvent[] = [];
@@ -86,10 +120,13 @@ export class SurvivalRun {
   }
 
   /** Clean state for a new run (replay never inherits anything from the last one). */
-  reset(player: Vec2, ability: AbilityKind = this.ability.kind, training = false): void {
+  reset(player: Vec2, ability: AbilityKind = this.ability.kind, training = false, perks: AbilityPerks = FULL_PERKS): void {
     this.training = training;
     this.health = new Health();
-    this.ability = new Ability(ability, training ? TRAINING.abilityCooldown : undefined);
+    // Training always lets you try the ability (owner: try any hero), at its base strength.
+    this.ability = training
+      ? new Ability(ability, TRAINING.abilityCooldown)
+      : new Ability(ability, ABILITIES[ability].cooldown * perks.cooldownMult, perks.boost, !perks.abilityUnlocked);
     this.dummies = training ? TRAINING.dummies.map((d) => ({ pos: { ...d }, home: { ...d }, stun: 0 })) : [];
     this.score = new ScoreKeeper();
     this.score.onBonus = (points) => this.events.push({ type: 'bonus', points });
@@ -98,6 +135,11 @@ export class SurvivalRun {
     this.guards.length = 0;
     this.decoys = [];
     this.read.clear();
+    this.endless = false;
+    this.endlessTime = 0;
+    this.endlessSpawned = 0;
+    this.gamesWon = 0;
+    this.idCard = training ? null : { pos: this.idCardSpot(player), taken: false };
     this.spawned = 0;
     this.over = false;
     this.events = [];
@@ -155,6 +197,7 @@ export class SurvivalRun {
 
   /** Current chase speed: ramps with run time and is capped. */
   get chaseSpeed(): number {
+    if (this.endless) return Math.min(ENDLESS.speedCap, GUARD.chaseSpeedMax + ENDLESS.speedGrowth * this.endlessTime);
     return lerp(GUARD.chaseSpeedStart, GUARD.chaseSpeedMax, clamp(this.score.time / GUARD.speedRampSeconds, 0, 1));
   }
 
@@ -176,7 +219,7 @@ export class SurvivalRun {
     if (this.over || !this.ability.trigger()) return false;
     let affected = 0;
     if (this.ability.kind === 'shockwave') {
-      const w = ABILITIES.shockwave;
+      const w = { ...ABILITIES.shockwave, radius: ABILITIES.shockwave.radius * this.ability.boost };
       for (const g of this.guards) {
         const dx = g.pos.x - player.x;
         const dz = g.pos.z - player.z;
@@ -214,16 +257,50 @@ export class SurvivalRun {
     return true;
   }
 
+  get hasIdCard(): boolean {
+    return !!this.idCard?.taken;
+  }
+
+  get cleared(): number {
+    return this.read.size;
+  }
+
+  /** A mini-game was won (counts for daily tasks even when re-clearing in training). */
+  wonGame(): void {
+    if (!this.training) this.gamesWon++;
+  }
+
   /**
-   * The hero opened exhibit `id`. Pays the discovery bonus the first time per run (never in training).
-   * Reading itself happens while the run is frozen, so it can't be used to farm time or coins.
+   * Exhibit `id` was cleared (its mini-game won). Pays score + coins once per run, the diamond
+   * milestones at 5 / 10 / 15, and switches to Endless Mode after the last one. Training pays nothing.
    */
-  discover(id: string): number {
-    if (this.over || this.read.has(id)) return 0;
+  discover(id: string): ExhibitPayout {
+    const none = { points: 0, coins: 0, diamonds: 0 };
+    if (this.over || this.read.has(id)) return none;
     this.read.add(id);
-    const points = this.training ? 0 : this.score.discover();
-    this.queued.push({ type: 'discovered', id, points });
-    return points;
+    const cleared = this.read.size;
+    if (this.training) {
+      this.queued.push({ type: 'discovered', id, ...none, cleared });
+      return none;
+    }
+    const pay = {
+      points: this.score.discover(EXHIBIT_REWARDS.coins),
+      coins: EXHIBIT_REWARDS.coins,
+      diamonds: EXHIBIT_REWARDS.milestones.find((m) => m.at === cleared)?.diamonds ?? 0,
+    };
+    this.queued.push({ type: 'discovered', id, ...pay, cleared });
+    if (cleared >= this.exhibitTotal && !this.endless) {
+      this.endless = true;
+      this.queued.push({ type: 'endless' });
+    }
+    return pay;
+  }
+
+  /** A walkable spot far from the hero (it's a hunt, not a gift). */
+  private idCardSpot(player: Vec2): Vec2 {
+    const far = this.spots.filter((s) => Math.hypot(s.x - player.x, s.z - player.z) >= 14);
+    const pool = far.length ? far : this.spots;
+    return { ...pool[Math.floor(this.rng() * pool.length)]! };
   }
 
   /** Events raised outside `update` (ability use) are delivered with the next update. */
@@ -234,6 +311,7 @@ export class SurvivalRun {
     if (this.over) return this.events;
     // Training never scores (no survival bonus to farm).
     if (!this.training) this.score.update(dt);
+    if (this.endless && !this.training) this.endlessTime += dt;
     this.health.update(dt);
     this.ability.update(dt);
 
@@ -249,6 +327,12 @@ export class SurvivalRun {
       } else {
         this.events.push({ type: 'pickup', kind: got.kind, pos: got.pos, points: this.score.collect(got.kind) });
       }
+    }
+
+    const card = this.idCard;
+    if (card && !card.taken && Math.hypot(card.pos.x - player.x, card.pos.z - player.z) <= PICKUPS.pickupRadius + 0.2) {
+      card.taken = true;
+      this.events.push({ type: 'idCard', pos: { ...card.pos } });
     }
 
     if (!this.peaceful) {
@@ -292,6 +376,11 @@ export class SurvivalRun {
     while (this.spawned < SPAWN_SCHEDULE.length && this.score.time >= SPAWN_SCHEDULE[this.spawned]!.at) {
       this.spawnEnemy(SPAWN_SCHEDULE[this.spawned]!.kind, player);
       this.spawned++;
+    }
+    // Endless: a new arrival every few seconds until the museum is packed.
+    while (this.endless && this.guards.length < ENDLESS.maxEnemies && this.endlessTime >= (this.endlessSpawned + 1) * ENDLESS.spawnEvery) {
+      this.spawnEnemy(ENDLESS.kinds[this.endlessSpawned % ENDLESS.kinds.length]!, player);
+      this.endlessSpawned++;
     }
   }
 

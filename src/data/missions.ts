@@ -1,25 +1,24 @@
-/** Mission pool (M4, + exhibits in M6). Missions cycle in this order; each full cycle raises targets and rewards. */
+/** Mission pool (M4, exhibits M6, XP rewards M7). Missions cycle in this order; each full cycle raises targets and rewards. */
 
 export type MissionKind = 'coinsRun' | 'surviveRun' | 'scoreRun' | 'comboRun' | 'abilityTotal' | 'runsTotal' | 'coinsTotal' | 'exhibitsRun';
 
 export interface MissionTemplate {
   kind: MissionKind;
   target: number;
-  coins: number;
-  hiyas: number;
+  /** Player XP paid when claimed (owner, M7: missions give XP; daily tasks give coins). */
+  xp: number;
 }
 
 export const MISSION_POOL: readonly MissionTemplate[] = [
-  { kind: 'coinsRun', target: 15, coins: 60, hiyas: 0 },
-  { kind: 'abilityTotal', target: 3, coins: 0, hiyas: 5 },
-  { kind: 'surviveRun', target: 45, coins: 80, hiyas: 0 },
-  { kind: 'runsTotal', target: 3, coins: 0, hiyas: 5 },
-  { kind: 'comboRun', target: 3, coins: 100, hiyas: 0 },
-  { kind: 'scoreRun', target: 600, coins: 0, hiyas: 8 },
-  { kind: 'coinsTotal', target: 60, coins: 120, hiyas: 0 },
-  { kind: 'surviveRun', target: 90, coins: 0, hiyas: 10 },
-  // M6 (appended so older saves keep their current missions).
-  { kind: 'exhibitsRun', target: 2, coins: 0, hiyas: 6 },
+  { kind: 'coinsRun', target: 15, xp: 60 },
+  { kind: 'abilityTotal', target: 3, xp: 50 },
+  { kind: 'surviveRun', target: 45, xp: 60 },
+  { kind: 'runsTotal', target: 3, xp: 50 },
+  { kind: 'comboRun', target: 3, xp: 70 },
+  { kind: 'scoreRun', target: 600, xp: 70 },
+  { kind: 'coinsTotal', target: 60, xp: 80 },
+  { kind: 'surviveRun', target: 90, xp: 90 },
+  { kind: 'exhibitsRun', target: 3, xp: 80 },
 ];
 
 export const MISSIONS = {

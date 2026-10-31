@@ -11,18 +11,28 @@ export class Ability {
   activeLeft = 0;
   uses = 0;
 
-  /** `cooldown` defaults to the data value; training passes a short one. */
+  /**
+   * `cooldown` defaults to the data value; training passes a short one. `boost` (hero level 9) makes
+   * it last / reach further; `locked` = hero below level 5 (it never fires).
+   */
   constructor(
     readonly kind: AbilityKind,
     readonly cooldown: number = ABILITIES[kind].cooldown,
+    readonly boost = 1,
+    readonly locked = false,
   ) {}
+
+  /** Seconds the effect lasts (boosted). */
+  get duration(): number {
+    return this.def.duration * this.boost;
+  }
 
   get def(): (typeof ABILITIES)[AbilityKind] {
     return ABILITIES[this.kind];
   }
 
   get ready(): boolean {
-    return this.cooldownLeft <= 0;
+    return !this.locked && this.cooldownLeft <= 0;
   }
 
   get active(): boolean {
@@ -31,6 +41,7 @@ export class Ability {
 
   /** 0 = just used, 1 = ready. */
   get cooldownFrac(): number {
+    if (this.locked) return 0;
     return this.ready ? 1 : 1 - this.cooldownLeft / this.cooldown;
   }
 
@@ -38,7 +49,7 @@ export class Ability {
   trigger(): boolean {
     if (!this.ready) return false;
     this.cooldownLeft = this.cooldown;
-    this.activeLeft = this.def.duration;
+    this.activeLeft = this.duration;
     this.uses++;
     return true;
   }

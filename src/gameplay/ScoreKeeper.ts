@@ -15,7 +15,7 @@ export class ScoreKeeper {
   combo = 0;
   /** Highest multiplier reached this run (missions). */
   bestMultiplier = 1;
-  /** Exhibits read for the first time this run. */
+  /** Exhibits cleared this run. */
   discoveries = 0;
   private comboTimer = 0;
   private bonusesPaid = 0;
@@ -52,9 +52,10 @@ export class ScoreKeeper {
     return pts;
   }
 
-  /** First read of an exhibit this run (the run makes sure each exhibit pays once). */
-  discover(): number {
+  /** Exhibit cleared this run (the run makes sure each pays once): score + spendable coins. */
+  discover(coins = 0): number {
     this.score += SCORING.artifactDiscovery;
+    this.runCoins += coins;
     this.discoveries++;
     return SCORING.artifactDiscovery;
   }

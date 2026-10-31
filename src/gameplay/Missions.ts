@@ -7,8 +7,7 @@ export interface Mission {
   kind: MissionKind;
   target: number;
   progress: number;
-  coins: number;
-  hiyas: number;
+  xp: number;
 }
 
 /** What a finished run contributes to missions. */
@@ -21,8 +20,10 @@ export interface RunSummary {
   coinsPicked: number;
   bestMultiplier: number;
   abilityUses: number;
-  /** Exhibits discovered (first read) this run. */
+  /** Exhibits cleared (mini-game won) this run. */
   exhibits: number;
+  /** Mini-games won this run. */
+  gamesWon: number;
 }
 
 /** Builds mission number `seq` (deterministic: pool order, scaled up every full cycle). */
@@ -32,7 +33,7 @@ export function makeMission(seq: number): Mission {
   let target = Math.round(t.target * scale);
   if (t.kind === 'comboRun') target = Math.min(MISSIONS.maxCombo, t.target + Math.floor(seq / MISSION_POOL.length));
   if (t.kind === 'scoreRun') target = Math.round(target / 50) * 50;
-  return { seq, kind: t.kind, target, progress: 0, coins: Math.round(t.coins * scale), hiyas: Math.round(t.hiyas * scale) };
+  return { seq, kind: t.kind, target, progress: 0, xp: Math.round(t.xp * scale) };
 }
 
 export const isDone = (m: Mission): boolean => m.progress >= m.target;
@@ -55,7 +56,7 @@ export function describe(m: Mission): string {
     case 'coinsTotal':
       return `Kumuha ng ${m.target} coins (total)`;
     case 'exhibitsRun':
-      return `Mag-discover ng ${m.target} exhibits sa isang run`;
+      return `Mag-clear ng ${m.target} exhibits sa isang run`;
   }
 }
 

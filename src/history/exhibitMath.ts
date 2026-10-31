@@ -17,3 +17,36 @@ export function exhibitInReach(pos: Vec2, list: readonly Exhibit[] = EXHIBITS): 
   }
   return best;
 }
+
+export interface GuideTarget {
+  kind: 'exhibit' | 'card';
+  at: Vec2;
+  id: string;
+}
+
+/**
+ * Where the floor arrow points in Exhibit Mode: the nearest exhibit not yet cleared this run.
+ * Card Swipe exhibits need the Curator ID first, so until it's found the ID card is the target for them.
+ */
+export function guideTarget(pos: Vec2, cleared: ReadonlySet<string>, card: { pos: Vec2; taken: boolean } | null, list: readonly Exhibit[] = EXHIBITS): GuideTarget | null {
+  let best: GuideTarget | null = null;
+  let bestD = Infinity;
+  const consider = (t: GuideTarget): void => {
+    const d = Math.hypot(t.at.x - pos.x, t.at.z - pos.z);
+    if (d < bestD) {
+      best = t;
+      bestD = d;
+    }
+  };
+  let needsCard = false;
+  for (const e of list) {
+    if (cleared.has(e.id)) continue;
+    if (e.game === 'swipe' && !card?.taken) {
+      needsCard = true;
+      continue;
+    }
+    consider({ kind: 'exhibit', at: e.at, id: e.id });
+  }
+  if (needsCard && card && !card.taken) consider({ kind: 'card', at: card.pos, id: 'id-card' });
+  return best;
+}

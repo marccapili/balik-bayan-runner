@@ -7,7 +7,7 @@ import { PLAYER_CONFIG } from '../../src/data/config';
 import { HERO_ORDER, HEROES } from '../../src/data/heroes';
 import { MISSION_POOL, MISSIONS } from '../../src/data/missions';
 import { buildColliders, MUSEUM_BOUNDS } from '../../src/data/museumLayout';
-import { EXCHANGE, SKINS } from '../../src/data/skins';
+import { SKINS } from '../../src/data/skins';
 import { TRAINING } from '../../src/data/training';
 import { Ability } from '../../src/gameplay/Ability';
 import { applyRun, describe as describeMission, makeMission, type RunSummary } from '../../src/gameplay/Missions';
@@ -146,7 +146,7 @@ describe('PlayerMotor dash', () => {
 });
 
 describe('Missions', () => {
-  const r = (o: Partial<RunSummary>): RunSummary => ({ score: 0, time: 0, runCoins: 0, coinsPicked: 0, bestMultiplier: 1, abilityUses: 0, exhibits: 0, ...o });
+  const r = (o: Partial<RunSummary>): RunSummary => ({ score: 0, time: 0, runCoins: 0, coinsPicked: 0, bestMultiplier: 1, abilityUses: 0, exhibits: 0, gamesWon: 0, ...o });
 
   it('run missions keep the best run, total missions add up', () => {
     const ms = [makeMission(0), makeMission(1), makeMission(3)]; // coinsRun 15, abilityTotal 3, runsTotal 3
@@ -165,7 +165,7 @@ describe('Missions', () => {
     const a = makeMission(0);
     const b = makeMission(n);
     expect(b.target).toBeGreaterThan(a.target);
-    expect(b.coins).toBeGreaterThan(a.coins);
+    expect(b.xp).toBeGreaterThan(a.xp);
     for (let i = 0; i < n * 6; i++) {
       const m = makeMission(i);
       if (m.kind === 'comboRun') expect(m.target).toBeLessThanOrEqual(MISSIONS.maxCombo);
@@ -177,7 +177,7 @@ describe('Missions', () => {
 describe('SaveManager v3: shop + missions', () => {
   it('migrates a v2 save: keeps progress, adds classic skins and fresh missions', () => {
     const d = migrate({ version: 2, coins: 500, diamonds: 3, ownedHeroes: ['rizal', 'lapulapu'], selectedHero: 'lapulapu' });
-    expect(d.version).toBe(4);
+    expect(d.version).toBe(5);
     expect(d.coins).toBe(500);
     expect(d.selectedHero).toBe('lapulapu');
     expect(d.equippedSkins.lapulapu).toBe('lapulapu.classic');
@@ -190,7 +190,7 @@ describe('SaveManager v3: shop + missions', () => {
     expect(d.ownedSkins).not.toContain('fake.skin');
     expect(d.equippedSkins.rizal).toBe('rizal.classic'); // not owned
     expect(d.equippedSkins.gabriela).toBe('gabriela.classic');
-    expect(d.missions[0]!.coins).toBe(makeMission(0).coins);
+    expect(d.missions[0]!.xp).toBe(makeMission(0).xp);
     expect(d.missions[0]!.progress).toBe(makeMission(0).target);
     expect(d.missions).toHaveLength(MISSIONS.active);
   });
@@ -198,6 +198,8 @@ describe('SaveManager v3: shop + missions', () => {
   it('skins cost Hiyas, need the hero, never charge twice', () => {
     const s = new SaveManager(memStore());
     const puti = SKINS.find((k) => k.id === 'rizal.puti')!;
+    expect(puti.cost).toBe(300);
+    s.data.ownedHeroes.push('rizal');
     expect(s.buySkin('rizal.puti')).toBe('insufficient');
     s.data.diamonds = puti.cost + 5;
     expect(s.buySkin('lapulapu.dagat')).toBe('locked');
@@ -211,26 +213,18 @@ describe('SaveManager v3: shop + missions', () => {
     expect(s.equipSkin('gabriela.berde')).toBe(false);
   });
 
-  it('exchange trades coins for Hiyas at the shop rate only when affordable', () => {
-    const s = new SaveManager(memStore());
-    s.data.coins = EXCHANGE.coins - 1;
-    expect(s.exchange()).toBe(false);
-    s.data.coins = EXCHANGE.coins * 2;
-    expect(s.exchange()).toBe(true);
-    expect(s.data.coins).toBe(EXCHANGE.coins);
-    expect(s.data.diamonds).toBe(EXCHANGE.hiyas);
-  });
-
   it('runs progress missions; claiming pays once and brings the next mission', () => {
     const store = memStore();
     const s = new SaveManager(store);
     const first = s.data.missions[0]!;
-    const rec = s.recordRun({ score: 100, time: 30, runCoins: first.target, coinsPicked: first.target, bestMultiplier: 1, abilityUses: 0, exhibits: 0 }, 'rizal');
+    const rec = s.recordRun({ score: 100, time: 30, runCoins: first.target, coinsPicked: first.target, bestMultiplier: 1, abilityUses: 0, exhibits: 0, gamesWon: 0 }, 'rizal');
     expect(rec.completedMissions.map((m) => m.seq)).toContain(first.seq);
     expect(s.claimableMissions).toBe(1);
     const coins = s.data.coins;
-    expect(s.claimMission(first.seq)).toEqual({ coins: first.coins, hiyas: first.hiyas });
-    expect(s.data.coins).toBe(coins + first.coins);
+    const xp = s.data.playerXp;
+    expect(s.claimMission(first.seq)?.xp).toBe(first.xp);
+    expect(s.data.playerXp).toBe(xp + first.xp);
+    expect(s.data.coins).toBe(coins); // missions pay XP only
     expect(s.claimMission(first.seq)).toBeNull();
     expect(s.data.missions.map((m) => m.seq)).toEqual([MISSIONS.active, 1, 2]);
     expect(new SaveManager(store).data.missions[0]!.seq).toBe(MISSIONS.active); // persisted

@@ -5,9 +5,15 @@ import { RENDER_CONFIG } from '../data/config';
 import { FEEDBACK } from '../data/gameplay';
 import { ABILITIES } from '../data/abilities';
 import { ENEMY_INTRO, type EnemyKind } from '../data/enemies';
-import { EXHIBIT_CONFIG, type Exhibit } from '../data/exhibits';
+import { EXHIBIT_BY_ID, EXHIBIT_CONFIG, type Exhibit } from '../data/exhibits';
 import { HEROES, type HeroId } from '../data/heroes';
+import { MINIGAME } from '../data/minigames';
+import { HERO_LEVEL } from '../data/progression';
 import { describe } from '../gameplay/Missions';
+import { describeDaily, heroPerks } from '../gameplay/Progression';
+import type { ExhibitPayout } from '../gameplay/SurvivalRun';
+import { MiniGameHost, type MiniSound } from '../ui/MiniGameHost';
+import type { PromptMode } from '../ui/Hud';
 import type { IntroEvent } from '../gameplay/IntroSequence';
 import type { RunEvent } from '../gameplay/SurvivalRun';
 import { LobbyScene } from '../scenes/LobbyScene';
@@ -20,6 +26,7 @@ import { GAME_TRANSITIONS, StateMachine, type GameState } from './StateMachine';
 
 /** Sound played when each kind of enemy joins the run. */
 const JOIN_SOUND: Record<EnemyKind, SfxName> = { guard: 'alert', dog: 'bark', multo: 'whoo', tikbalang: 'neigh' };
+const MINI_SOUND: Record<MiniSound, SfxName> = { click: 'click', good: 'coin', bad: 'denied', win: 'unlock' };
 
 /** Owns the engine, the render loop, both scenes and the top-level state machine. */
 export class Game {
@@ -30,6 +37,7 @@ export class Game {
   private lobbyScene: LobbyScene | null = null;
   private hud: Hud | null = null;
   private lobby: Lobby | null = null;
+  private mini: MiniGameHost | null = null;
   private transition: Transition | null = null;
   readonly save = new SaveManager();
   readonly sfx = new Sfx();
@@ -37,6 +45,8 @@ export class Game {
   simTime = 0;
   /** Ability events handled (tests check each use plays its sound/effect once). */
   private abilityEvents = 0;
+  /** Last results (tests). */
+  private lastRecord: unknown = null;
   /** Real seconds left in the knocked-down beat before results appear. */
   private defeatLeft = 0;
   /** Set by the TAP TO DROP button; consumed by the intro. */
@@ -106,7 +116,7 @@ export class Game {
       onPlay: () => void this.play(),
       onTrain: (id) => void this.train(id),
       onPreview: (id, skin) => this.lobbyScene?.setHero(id, skin ?? this.save.skinOf(id)),
-      onPurchase: (kind) => this.sfx.play(kind === 'claim' ? 'claim' : 'unlock'),
+      onPurchase: (kind) => this.sfx.play(kind === 'skin' ? 'unlock' : kind === 'frame' ? 'click' : 'claim'),
       onUnlock: (id) => {
         const r = this.save.unlockHero(id);
         if (r === 'ok') this.sfx.play('unlock');
@@ -125,6 +135,11 @@ export class Game {
       },
       onClick: () => this.sfx.play('click'),
     });
+    this.mini = new MiniGameHost(this.uiRoot, {
+      onWin: () => this.miniWon(),
+      onQuit: () => this.closeMini(),
+      onSound: (s) => this.sfx.play(MINI_SOUND[s]),
+    });
     this.transition = new Transition(this.uiRoot);
     this.applySettings();
     this.museum.onRoomChange = (r) => {
@@ -132,7 +147,9 @@ export class Game {
       if (!this.trainingHero) this.hud?.showRoom(`📍 ${r.sign}`, r.subtitle);
     };
     this.museum.onEvent = (e) => this.onRunEvent(e);
-    this.museum.isDiscovered = (id) => this.save.data.discovered.includes(id);
+    // Markers show what's cleared in *this* run (Exhibit Mode); the Archive keeps the all-time list.
+    this.museum.isDiscovered = (id) => !!this.museum?.run.read.has(id);
+    this.museum.perksFor = (id) => heroPerks(this.save.heroLevel(id));
     const q = new URLSearchParams(location.search);
     if (q.has('peaceful')) this.museum.run.peaceful = true;
 
@@ -200,7 +217,7 @@ export class Game {
 
   private beginTraining(): void {
     if (!this.museum || !this.trainingHero) return;
-    this.input.releaseAll();
+    this.closeMini();
     this.hud?.hideResults();
     this.hud?.setPaused(false);
     this.museum.startTraining();
@@ -212,7 +229,7 @@ export class Game {
 
   private beginIntro(): void {
     if (!this.museum || !this.fsm.transition('intro')) return;
-    this.input.releaseAll();
+    this.closeMini();
     this.dropRequested = false;
     this.defeatLeft = 0;
     this.hud?.hideResults();
@@ -240,6 +257,7 @@ export class Game {
     this.input.releaseAll();
     await this.transition?.cover();
     this.fsm.transition('lobby');
+    this.closeMini();
     this.defeatLeft = 0;
     this.hud?.hideResults();
     this.hud?.setPaused(false);
@@ -260,7 +278,7 @@ export class Game {
       if (state === 'playing') this.pause();
       else if (state === 'paused') this.resume();
       else if (state === 'reading') this.closeExhibit();
-      else if (state === 'lobby') this.lobby?.closePanel();
+      else if (state === 'lobby') this.lobby?.back();
     }
     if (state === 'lobby') {
       this.lobbyScene?.update(dt);
@@ -273,16 +291,25 @@ export class Game {
       if (this.input.consume('ability') && !this.museum.useAbility()) {
         this.sfx.play('denied');
         this.hud?.abilityDenied();
+        if (this.museum.run.ability.locked) this.hud?.showRoom(`🔒 Skill sa Lv ${HERO_LEVEL.abilityLevel}`, `Mag-level up muna si ${HEROES[this.heroId].name}`);
       }
+      const mini = this.mini;
       const near = this.museum.nearExhibit;
-      if (interact && near) {
-        this.openExhibit(near);
+      if (mini?.active) {
+        // The world keeps going while the hero is busy: enemies can sneak up (owner: yes).
+        this.simTime += dt;
+        this.museum.update(dt, true);
+        mini.update(dt);
+        mini.setDanger(this.nearestEnemy() < MINIGAME.dangerRange);
+        this.pushStats();
+      } else if (interact && near) {
+        this.interactExhibit(near);
       } else {
         this.simTime += dt;
         this.museum.update(dt);
         this.pushStats();
         const n = this.museum.nearExhibit;
-        this.hud?.setExhibitPrompt(n, !!n && this.save.data.discovered.includes(n.id));
+        this.hud?.setExhibitPrompt(n, n ? this.promptMode(n) : 'new');
       }
     } else if (state === 'reading') {
       // Frozen run (like pause): E / Esc / the button closes the panel.
@@ -324,17 +351,69 @@ export class Game {
     }
   }
 
-  /** Opens an exhibit: freezes the run, pays the first-read bonus, adds it to the Archive. */
-  private openExhibit(e: Exhibit): void {
+  private promptMode(e: Exhibit): PromptMode {
+    const run = this.museum!.run;
+    if (run.read.has(e.id)) return 'cleared';
+    if (run.training) return 'practice';
+    return e.game === 'swipe' && !run.hasIdCard ? 'needId' : 'new';
+  }
+
+  /** E / tap near an exhibit: re-read a cleared one, or start its mini-game. */
+  private interactExhibit(e: Exhibit): void {
     const run = this.museum?.run;
-    if (!run || !this.fsm.transition('reading')) return;
+    if (!run) return;
+    const mode = this.promptMode(e);
+    if (mode === 'cleared') {
+      this.openExhibit(e, null);
+    } else if (mode === 'needId') {
+      this.sfx.play('denied');
+      this.hud?.showRoom('🪪 Kailangan ng Curator ID!', 'Sundan ang dilaw na arrow para mahanap ang ID card');
+    } else {
+      this.input.releaseAll();
+      this.hud?.setExhibitPrompt(null);
+      this.mini?.open(e, run.cleared / run.exhibitTotal);
+      this.sfx.play('page');
+    }
+  }
+
+  private closeMini(): void {
+    this.mini?.close();
     this.input.releaseAll();
-    const points = run.discover(e.id);
+  }
+
+  /** Mini-game solved: pay for the exhibit and open its history panel. */
+  private miniWon(): void {
+    const id = this.mini?.exhibitId;
+    const run = this.museum?.run;
+    this.mini?.close();
+    const e = id ? EXHIBIT_BY_ID[id] : undefined;
+    if (!e || !run || run.over || this.fsm.state !== 'playing') return;
+    run.wonGame();
+    const pay = run.discover(e.id);
+    if (pay.diamonds) this.save.addDiamonds(pay.diamonds);
+    this.openExhibit(e, pay);
+  }
+
+  /** Opens an exhibit panel (run frozen) and adds it to the Archive. `pay` = what clearing it just paid. */
+  private openExhibit(e: Exhibit, pay: ExhibitPayout | null): void {
+    if (!this.museum || !this.fsm.transition('reading')) return;
+    this.input.releaseAll();
     const isNew = this.save.discover(e.id);
-    this.hud?.setExhibitPrompt(null, false);
-    this.hud?.showExhibit(e, points, isNew);
-    this.sfx.play('page');
+    this.hud?.setExhibitPrompt(null);
+    this.hud?.showExhibit(e, pay, isNew);
+    this.sfx.play(pay?.diamonds ? 'claim' : 'page');
+    this.pushStats();
     this.lobby?.refresh();
+  }
+
+  /** Distance to the closest enemy that can hurt the hero right now. */
+  private nearestEnemy(): number {
+    const m = this.museum;
+    if (!m) return Infinity;
+    const p = m.player.position;
+    let best = Infinity;
+    for (const g of m.run.guards) if (g.canHurt) best = Math.min(best, Math.hypot(g.pos.x - p.x, g.pos.z - p.z));
+    return best;
   }
 
   closeExhibit(): void {
@@ -365,6 +444,7 @@ export class Game {
     }
     if (this.fsm.state === 'playing') {
       // Dev/test path: restart without the intro while already running.
+      this.closeMini();
       this.museum.resetRun();
       this.pushStats();
       return;
@@ -384,7 +464,8 @@ export class Game {
     if (!run || !this.hud) return;
     this.hud.setStats({ hearts: run.health.hearts, score: run.score.score, coins: run.score.runCoins, time: run.score.time, multiplier: run.score.multiplier });
     const ab = run.ability;
-    this.hud.setAbilityState(ab.cooldownFrac, ab.active || run.shielded, ab.cooldownLeft);
+    this.hud.setAbilityState(ab.cooldownFrac, ab.active || run.shielded, ab.cooldownLeft, ab.locked ? HERO_LEVEL.abilityLevel : 0);
+    this.hud.setExhibitProgress(run.cleared, run.exhibitTotal, run.endless, run.hasIdCard);
   }
 
   private onRunEvent(e: RunEvent): void {
@@ -405,6 +486,18 @@ export class Game {
       case 'hit':
         this.sfx.play('hit');
         hud?.flashHurt();
+        if (this.mini?.active) {
+          this.closeMini();
+          if (!m.run.over) hud?.showRoom('💥 Nahuli ka habang naglalaro!', 'Na-cancel ang mini-game. Balikan mo mamaya');
+        }
+        break;
+      case 'idCard':
+        this.sfx.play('claim');
+        hud?.showRoom('🪪 Curator ID, nakuha!', 'Pwede mo nang i-swipe sa Card Swipe exhibits');
+        break;
+      case 'endless':
+        this.sfx.play('gameover');
+        hud?.banner('🏛️ MUSEUM CLEARED! ♾️', 'Endless Mode na: bibilis at dadami sila hanggang mahuli ka. Habol pa ng score!');
         break;
       case 'alert':
         this.sfx.play('alert');
@@ -443,7 +536,7 @@ export class Game {
       case 'discovered':
         if (e.points > 0) {
           const p = m.toScreen(m.player.position, 2.4);
-          hud?.floatText(p.x, p.y, `+${e.points} Discovery! 📜`, 'bonus');
+          hud?.floatText(p.x, p.y, `+${e.points} · +${e.coins} 🪙 📜`, 'bonus');
         }
         break;
       case 'illusion':
@@ -471,9 +564,19 @@ export class Game {
     if (!run) return;
     const s = run.score;
     const rec = this.save.recordRun(
-      { score: s.score, time: s.time, runCoins: s.runCoins, coinsPicked: s.coinsPicked, bestMultiplier: s.bestMultiplier, abilityUses: run.ability.uses, exhibits: s.discoveries },
+      {
+        score: s.score,
+        time: s.time,
+        runCoins: s.runCoins,
+        coinsPicked: s.coinsPicked,
+        bestMultiplier: s.bestMultiplier,
+        abilityUses: run.ability.uses,
+        exhibits: s.discoveries,
+        gamesWon: run.gamesWon,
+      },
       this.heroId,
     );
+    this.lastRecord = rec;
     this.hud?.showResults({
       score: run.score.score,
       time: run.score.time,
@@ -482,7 +585,15 @@ export class Game {
       newBest: rec.newBest,
       wallet: this.save.data.coins,
       missions: rec.completedMissions.map(describe),
+      daily: rec.completedDaily.map(describeDaily),
+      cleared: run.cleared,
+      total: run.exhibitTotal,
+      endlessTime: run.endless ? run.endlessTime : 0,
+      heroName: HEROES[this.heroId].name,
+      hero: rec.hero,
+      player: rec.player,
     });
+    if (rec.hero.to > rec.hero.from || rec.player.to > rec.player.from) this.sfx.play('claim');
   }
 
   readonly debug: DebugHooks = {
@@ -500,7 +611,7 @@ export class Game {
       m.run.spawnEnemy(kind, m.player.position, x !== undefined && z !== undefined ? { x, z } : undefined);
     },
     setInvulnerable: (seconds) => {
-      this.museum?.run.health.grantInvuln(seconds);
+      this.museum?.run.health.setInvuln(seconds);
     },
     setPeaceful: (p) => {
       if (this.museum) this.museum.run.peaceful = p;
@@ -513,6 +624,30 @@ export class Game {
     addHiyas: (n) => {
       this.save.data.diamonds += Math.max(0, Math.floor(n));
       this.save.save();
+      this.lobby?.refresh();
+    },
+    winMiniGame: () => this.mini?.forceWin(),
+    giveIdCard: () => {
+      const c = this.museum?.run.idCard;
+      if (c) {
+        const p = this.museum!.player.position;
+        c.pos = { ...p };
+      }
+    },
+    clearExhibits: (n) => {
+      const run = this.museum?.run;
+      if (!run) return;
+      for (const e of Object.values(EXHIBIT_BY_ID)) {
+        if (run.cleared >= n) break;
+        if (!run.read.has(e.id)) run.discover(e.id);
+      }
+    },
+    addHeroXp: (hero, xp) => {
+      this.save.addHeroXp(hero, xp);
+      this.lobby?.refresh();
+    },
+    addPlayerXp: (xp) => {
+      this.save.addPlayerXp(xp);
       this.lobby?.refresh();
     },
     finishMissions: () => {
@@ -544,6 +679,16 @@ export class Game {
       nearExhibit: this.museum?.nearExhibit?.id ?? null,
       exhibitPrompt: this.hud?.exhibitPromptVisible ?? false,
       exhibitOpen: this.hud?.exhibitVisible ?? false,
+      mini: this.mini?.active ? { kind: this.mini.kind, id: this.mini.exhibitId } : null,
+      cleared: run?.cleared,
+      endless: run?.endless ?? false,
+      endlessTime: run?.endlessTime ?? 0,
+      hasIdCard: run?.hasIdCard ?? false,
+      idCard: run?.idCard ? { ...run.idCard.pos, taken: run.idCard.taken } : null,
+      guide: this.museum?.guideTo ?? null,
+      chaseSpeed: run?.chaseSpeed,
+      abilityLocked: run?.ability.locked ?? false,
+      lastRecord: this.lastRecord,
       decoys: run?.decoys.map((d) => ({ x: d.pos.x, z: d.pos.z, ttl: d.ttl })),
       ability: run && { kind: run.ability.kind, ready: run.ability.ready, active: run.ability.active, uses: run.ability.uses, cooldownLeft: run.ability.cooldownLeft },
       shielded: run?.shielded ?? false,
@@ -584,6 +729,14 @@ export interface DebugHooks {
   addCoins(n: number): void;
   addHiyas(n: number): void;
   finishMissions(): void;
+  /** Solves the open mini-game. */
+  winMiniGame(): void;
+  /** Moves the Curator ID card under the hero (picked up next frame). */
+  giveIdCard(): void;
+  /** Marks exhibits cleared (paid as normal) until `n` are done. */
+  clearExhibits(n: number): void;
+  addHeroXp(hero: HeroId, xp: number): void;
+  addPlayerXp(xp: number): void;
 }
 
 const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));

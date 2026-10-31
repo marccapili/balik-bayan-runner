@@ -1,13 +1,27 @@
 import { EXHIBIT_BY_ID } from '../data/exhibits';
-import { HERO_ORDER, HEROES, type HeroId } from '../data/heroes';
+import { HERO_ORDER, HEROES, STARTER_HERO, type HeroId } from '../data/heroes';
 import { LEADERBOARD } from '../data/lobby';
 import { MISSIONS } from '../data/missions';
-import { classicSkin, EXCHANGE, SKIN_BY_ID, SKINS } from '../data/skins';
+import { PLAYER_LEVEL, PROFILE_FRAMES } from '../data/progression';
+import { classicSkin, SKIN_BY_ID, SKINS } from '../data/skins';
 import { applyRun, isDone, makeMission, type Mission, type RunSummary } from '../gameplay/Missions';
+import {
+  applyDaily,
+  dailyTasksFor,
+  heroDiamondsBetween,
+  heroLevel,
+  heroRunXp,
+  localDay,
+  playerLevel,
+  playerRunXp,
+  playerXpToReach,
+  type DailyTask,
+} from '../gameplay/Progression';
 
 /**
  * Versioned local save. v2 adds owned/selected heroes, nickname, local leaderboard and settings;
- * v3 adds skins (owned + equipped per hero) and missions; v4 adds the history archive (discovered exhibits).
+ * v3 adds skins (owned + equipped per hero) and missions; v4 adds the history archive (discovered exhibits);
+ * v5 adds hero XP, player XP, profile frame and daily tasks (missions now pay XP, no diamond exchange).
  * Anything missing, corrupted or from an older version goes through `migrate`.
  */
 export interface LeaderboardEntry {
@@ -26,7 +40,7 @@ export interface Settings {
 }
 
 export interface SaveData {
-  version: 4;
+  version: 5;
   coins: number;
   diamonds: number;
   bestScore: number;
@@ -44,29 +58,51 @@ export interface SaveData {
   missionSeq: number;
   /** Exhibit ids found so far (the lobby Archive), in discovery order. */
   discovered: string[];
+  /** Hero XP totals (levels are derived). */
+  heroXp: Record<HeroId, number>;
+  /** Player XP total (level is derived). */
+  playerXp: number;
+  /** Chosen profile frame id (must be unlocked). */
+  profileFrame: number;
+  /** Today's tasks; `day` is the local date they belong to. */
+  daily: { day: string; tasks: DailyTask[] };
+}
+
+/** A level change and the diamonds it paid. */
+export interface LevelUp {
+  from: number;
+  to: number;
+  xp: number;
+  diamonds: number;
 }
 
 /** What `recordRun` reports back to the results screen. */
 export interface RunRecord {
   newBest: boolean;
   completedMissions: Mission[];
+  completedDaily: DailyTask[];
+  hero: LevelUp;
+  player: LevelUp;
 }
 
 export type ShopResult = 'ok' | 'owned' | 'insufficient' | 'locked';
 
 const KEY = 'bbr.save';
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 const isHero = (v: unknown): v is HeroId => typeof v === 'string' && v in HEROES;
 
 const classicSkins = (): Record<HeroId, string> =>
   Object.fromEntries(HERO_ORDER.map((h) => [h, classicSkin(h)])) as Record<HeroId, string>;
 
+const zeroXp = (): Record<HeroId, number> => Object.fromEntries(HERO_ORDER.map((h) => [h, 0])) as Record<HeroId, number>;
+
 const freshMissions = (): Mission[] => Array.from({ length: MISSIONS.active }, (_, i) => makeMission(i));
 
-export function defaultSave(): SaveData {
+export function defaultSave(now = new Date()): SaveData {
+  const day = localDay(now);
   return {
-    version: 4,
+    version: 5,
     coins: 0,
     diamonds: 0,
     bestScore: 0,
@@ -74,7 +110,7 @@ export function defaultSave(): SaveData {
     runs: 0,
     nickname: '',
     ownedHeroes: HERO_ORDER.filter((h) => HEROES[h].unlockCost === 0),
-    selectedHero: 'rizal',
+    selectedHero: STARTER_HERO,
     leaderboard: [],
     settings: { muted: false, reducedEffects: false },
     ownedSkins: SKINS.filter((s) => s.cost === 0).map((s) => s.id),
@@ -82,7 +118,27 @@ export function defaultSave(): SaveData {
     missions: freshMissions(),
     missionSeq: MISSIONS.active,
     discovered: [],
+    heroXp: zeroXp(),
+    playerXp: 0,
+    profileFrame: 0,
+    daily: { day, tasks: dailyTasksFor(day) },
   };
+}
+
+function migrateDaily(raw: unknown, now: Date): SaveData['daily'] {
+  const day = localDay(now);
+  const fresh = { day, tasks: dailyTasksFor(day) };
+  if (!raw || typeof raw !== 'object') return fresh;
+  const r = raw as Record<string, unknown>;
+  if (r.day !== day || !Array.isArray(r.tasks)) return fresh;
+  // Rebuild from today's pick so tampered targets/rewards can't stick; keep progress + claimed.
+  fresh.tasks.forEach((t, i) => {
+    const o = (r.tasks as unknown[])[i] as Record<string, unknown> | undefined;
+    if (!o || o.kind !== t.kind) return;
+    t.progress = Math.min(t.target, num(o.progress));
+    t.claimed = o.claimed === true && t.progress >= t.target;
+  });
+  return fresh;
 }
 
 function migrateMission(raw: unknown): Mission | null {
@@ -116,11 +172,13 @@ function migrateEntry(raw: unknown): LeaderboardEntry | null {
 }
 
 /** Accepts anything (missing, corrupted, v1, v2) and returns a valid current save. */
-export function migrate(raw: unknown): SaveData {
-  const d = defaultSave();
+export function migrate(raw: unknown, now = new Date()): SaveData {
+  const d = defaultSave(now);
   if (!raw || typeof raw !== 'object') return d;
   const r = raw as Record<string, unknown>;
   const owned = Array.isArray(r.ownedHeroes) ? r.ownedHeroes.filter(isHero) : [];
+  // Before v5 Rizal was the free starter: players who already had a save keep him.
+  if (!(typeof r.version === 'number' && r.version >= 5)) owned.push('rizal');
   const ownedHeroes = HERO_ORDER.filter((h) => d.ownedHeroes.includes(h) || owned.includes(h));
   const selectedHero = isHero(r.selectedHero) && ownedHeroes.includes(r.selectedHero) ? r.selectedHero : d.selectedHero;
   const s = (r.settings && typeof r.settings === 'object' ? r.settings : {}) as Record<string, unknown>;
@@ -144,8 +202,14 @@ export function migrate(raw: unknown): SaveData {
   while (missions.length < MISSIONS.active) missions.push(makeMission(missionSeq++));
   missions = missions.slice(0, MISSIONS.active);
   const discovered = Array.isArray(r.discovered) ? [...new Set(r.discovered.filter((id): id is string => typeof id === 'string' && id in EXHIBIT_BY_ID))] : [];
+  const hx = (r.heroXp && typeof r.heroXp === 'object' ? r.heroXp : {}) as Record<string, unknown>;
+  const heroXp = zeroXp();
+  for (const h of HERO_ORDER) heroXp[h] = num(hx[h]);
+  const playerXp = Math.min(num(r.playerXp), playerXpToReach(PLAYER_LEVEL.cap));
+  const pf = num(r.profileFrame);
+  const profileFrame = (PROFILE_FRAMES[pf]?.level ?? Infinity) <= playerLevel(playerXp) ? pf : 0;
   return {
-    version: 4,
+    version: 5,
     coins: num(r.coins),
     diamonds: num(r.diamonds),
     bestScore: num(r.bestScore),
@@ -162,6 +226,10 @@ export function migrate(raw: unknown): SaveData {
     missions,
     missionSeq,
     discovered,
+    heroXp,
+    playerXp,
+    profileFrame,
+    daily: migrateDaily(r.daily, now),
   };
 }
 
@@ -223,6 +291,7 @@ export class SaveManager {
 
   /** Applies a finished run: wallet, bests, leaderboard and mission progress. */
   recordRun(r: RunSummary, hero: HeroId, today = new Date()): RunRecord {
+    this.ensureDaily(today);
     const d = this.data;
     const { score, time } = r;
     d.runs += 1;
@@ -232,8 +301,80 @@ export class SaveManager {
     if (time > d.bestTime) d.bestTime = time;
     if (score > 0) this.addToLeaderboard({ name: this.displayName, score: Math.floor(score), time, hero, date: today.toISOString().slice(0, 10) });
     const completedMissions = applyRun(d.missions, r).map((m) => ({ ...m }));
+    const completedDaily = applyDaily(d.daily.tasks, r).map((t) => ({ ...t }));
+    const heroUp = this.addHeroXp(hero, heroRunXp(r));
+    const playerUp = this.addPlayerXp(playerRunXp(r));
     this.save();
-    return { newBest: best, completedMissions };
+    return { newBest: best, completedMissions, completedDaily, hero: heroUp, player: playerUp };
+  }
+
+  heroLevel(hero: HeroId): number {
+    return heroLevel(this.data.heroXp[hero] ?? 0);
+  }
+
+  get playerLevel(): number {
+    return playerLevel(this.data.playerXp);
+  }
+
+  /** Adds hero XP and pays the diamonds of every level reached. */
+  addHeroXp(hero: HeroId, xp: number): LevelUp {
+    const d = this.data;
+    const from = heroLevel(d.heroXp[hero] ?? 0);
+    d.heroXp[hero] = (d.heroXp[hero] ?? 0) + Math.max(0, Math.floor(xp));
+    const to = heroLevel(d.heroXp[hero]);
+    const diamonds = heroDiamondsBetween(from, to);
+    d.diamonds += diamonds;
+    this.save();
+    return { from, to, xp: Math.max(0, Math.floor(xp)), diamonds };
+  }
+
+  /** Adds player XP (capped at the max level) and pays diamonds per level gained. */
+  addPlayerXp(xp: number): LevelUp {
+    const d = this.data;
+    const from = playerLevel(d.playerXp);
+    d.playerXp = Math.min(playerXpToReach(PLAYER_LEVEL.cap), d.playerXp + Math.max(0, Math.floor(xp)));
+    const to = playerLevel(d.playerXp);
+    const diamonds = (to - from) * PLAYER_LEVEL.diamondsPerLevel;
+    d.diamonds += diamonds;
+    this.save();
+    return { from, to, xp: Math.max(0, Math.floor(xp)), diamonds };
+  }
+
+  /** Exhibit milestone diamonds (paid during the run so a knockout never loses them). */
+  addDiamonds(n: number): void {
+    this.data.diamonds += Math.max(0, Math.floor(n));
+    this.save();
+  }
+
+  /** Rolls daily tasks over at local midnight. Returns true when they changed. */
+  ensureDaily(now = new Date()): boolean {
+    const day = localDay(now);
+    if (this.data.daily.day === day) return false;
+    this.data.daily = { day, tasks: dailyTasksFor(day) };
+    this.save();
+    return true;
+  }
+
+  claimDaily(i: number, now = new Date()): number | null {
+    if (this.ensureDaily(now)) return null;
+    const t = this.data.daily.tasks[i];
+    if (!t || t.claimed || t.progress < t.target) return null;
+    t.claimed = true;
+    this.data.coins += t.coins;
+    this.save();
+    return t.coins;
+  }
+
+  get claimableDaily(): number {
+    return this.data.daily.tasks.filter((t) => !t.claimed && t.progress >= t.target).length;
+  }
+
+  setFrame(id: number): boolean {
+    const f = PROFILE_FRAMES[id];
+    if (!f || f.level > this.playerLevel) return false;
+    this.data.profileFrame = id;
+    this.save();
+    return true;
   }
 
   /** Adds an exhibit to the archive. Returns true the first time it is ever found. */
@@ -244,17 +385,14 @@ export class SaveManager {
     return true;
   }
 
-  /** Pays out a completed mission and replaces it with the next one. Returns the reward, or null. */
-  claimMission(seq: number): { coins: number; hiyas: number } | null {
+  /** Pays out a completed mission (player XP) and replaces it with the next one. */
+  claimMission(seq: number): LevelUp | null {
     const d = this.data;
     const i = d.missions.findIndex((m) => m.seq === seq);
     const m = d.missions[i];
     if (!m || !isDone(m)) return null;
-    d.coins += m.coins;
-    d.diamonds += m.hiyas;
     d.missions.splice(i, 1, makeMission(d.missionSeq++));
-    this.save();
-    return { coins: m.coins, hiyas: m.hiyas };
+    return this.addPlayerXp(m.xp);
   }
 
   get claimableMissions(): number {
@@ -285,16 +423,6 @@ export class SaveManager {
 
   skinOf(hero: HeroId): string {
     return this.data.equippedSkins[hero] ?? classicSkin(hero);
-  }
-
-  /** Trades coins for Hiyas at the fixed shop rate. */
-  exchange(): boolean {
-    const d = this.data;
-    if (d.coins < EXCHANGE.coins) return false;
-    d.coins -= EXCHANGE.coins;
-    d.diamonds += EXCHANGE.hiyas;
-    this.save();
-    return true;
   }
 
   /** One row per nickname (their best run), top N by score. */

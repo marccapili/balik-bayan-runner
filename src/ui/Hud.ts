@@ -34,7 +34,25 @@ export interface RunResult {
   wallet: number;
   /** Mission descriptions completed by this run. */
   missions: string[];
+  /** Daily task descriptions completed by this run. */
+  daily: string[];
+  cleared: number;
+  total: number;
+  /** Seconds survived in Endless Mode (0 = never reached it). */
+  endlessTime: number;
+  heroName: string;
+  hero: { from: number; to: number; xp: number; diamonds: number };
+  player: { from: number; to: number; xp: number; diamonds: number };
 }
+
+/** What clearing an exhibit paid (shown on the reading panel). */
+export interface ExhibitReward {
+  points: number;
+  coins: number;
+  diamonds: number;
+}
+
+export type PromptMode = 'new' | 'cleared' | 'needId' | 'practice';
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   const el = root.querySelector<T>(sel);
@@ -63,9 +81,13 @@ export class Hud {
   private readonly exPrompt: HTMLElement;
   private readonly exPanel: HTMLElement;
   private exPromptId: string | null = null;
+  private progressKey = '';
   private abilityKey = '';
   private last: RunStats = { hearts: -1, score: -1, coins: -1, time: -1, multiplier: -1 };
   private toastTimer = 0;
+  /** A big banner owns the toast until then (ms); small toasts wait their turn. */
+  private bannerUntil = 0;
+  private pendingToast: [string, string] | null = null;
   private fpsAcc = 0;
   private fpsFrames = 0;
 
@@ -80,6 +102,7 @@ export class Hud {
         <div class="hud-left">
           <div class="hearts" aria-label="Hearts">${heartIcons}</div>
           <div class="score-line"><span class="score">0</span><span class="mult" hidden>x2</span></div>
+          <div class="ex-progress"><span class="exp-chip" aria-label="Exhibits cleared">🏛 <b class="exp-n">0</b>/<span class="exp-t">15</span></span><span class="id-chip" hidden title="Curator ID">🪪</span></div>
         </div>
         <div class="timer" aria-label="Survival time">0:00</div>
         <div class="hud-right">
@@ -100,7 +123,7 @@ export class Hud {
       </button>
       <button class="exhibit-prompt" data-act="interact" hidden>
         <span class="ep-icon">📖</span>
-        <span class="ep-text"><span class="hint-desktop">Press <b>E</b> to Discover History</span><span class="hint-touch">Tap para alamin</span>
+        <span class="ep-text"><span class="ep-action"></span>
         <small class="ep-title"></small></span>
       </button>
       <div class="room-toast" aria-live="polite"></div>
@@ -135,8 +158,10 @@ export class Hud {
             <div><dt>Score</dt><dd class="r-score">0</dd></div>
             <div><dt>Oras</dt><dd class="r-time">0:00</dd></div>
             <div><dt>Coins</dt><dd class="r-coins">0</dd></div>
-            <div><dt>Best</dt><dd class="r-best">0</dd></div>
+            <div><dt>Exhibits</dt><dd class="r-exhibits">0/15</dd></div>
           </dl>
+          <p class="r-best-line">Best: <b class="r-best">0</b></p>
+          <ul class="r-levels"></ul>
           <ul class="r-missions" hidden></ul>
           <p class="wallet">Wallet mo: <b class="r-wallet">0</b> coins</p>
           <button class="btn primary" data-act="replay">Laro ulit! 🔁</button>
@@ -188,21 +213,60 @@ export class Hud {
     $(tag, '.tt-hero').textContent = trainingHero ? `· ${trainingHero}` : '';
     if (mode !== 'intro') this.showDrop(false);
     if (mode === 'off' || mode === 'intro') {
-      this.setExhibitPrompt(null, false);
+      this.setExhibitPrompt(null);
       this.hideExhibit();
     }
   }
 
   /** Context prompt near an exhibit (null hides it). DOM only changes when the exhibit changes. */
-  setExhibitPrompt(e: Exhibit | null, known: boolean): void {
-    const id = e ? `${e.id}|${known}` : null;
+  setExhibitPrompt(e: Exhibit | null, mode: PromptMode = 'new'): void {
+    const id = e ? `${e.id}|${mode}` : null;
     if (id === this.exPromptId) return;
     this.exPromptId = id;
     this.exPrompt.hidden = !e;
     if (!e) return;
     this.exPrompt.dataset.kind = e.kind;
-    $(this.exPrompt, '.ep-icon').textContent = e.icon;
-    $(this.exPrompt, '.ep-title').innerHTML = `${esc(e.title)}${known ? ' · ✓ nasa Archive' : ' · ✨ bago!'}`;
+    this.exPrompt.dataset.mode = mode;
+    $(this.exPrompt, '.ep-icon').textContent = mode === 'needId' ? '🪪' : e.icon;
+    const key = '<span class="hint-desktop"><b>E</b> · </span>';
+    $(this.exPrompt, '.ep-action').innerHTML =
+      mode === 'needId'
+        ? 'Kailangan ng Curator ID! Hanapin muna 🪪'
+        : mode === 'cleared'
+          ? `${key}Basahin ulit 📖`
+          : mode === 'practice'
+            ? `${key}Practice mini-game 🎮`
+            : `${key}Mini-game para ma-unlock! 🎮`;
+    $(this.exPrompt, '.ep-title').innerHTML = `${esc(e.title)}${mode === 'cleared' ? ' · ✓ cleared' : ''}`;
+  }
+
+  /** Exhibit Mode counter (or the Endless badge) + Curator ID chip. */
+  setExhibitProgress(cleared: number, total: number, endless: boolean, hasId: boolean): void {
+    const key = `${cleared}|${total}|${endless}|${hasId}`;
+    if (key === this.progressKey) return;
+    this.progressKey = key;
+    const chip = $(this.root, '.exp-chip');
+    chip.classList.toggle('endless', endless);
+    chip.innerHTML = endless ? '♾️ <b>ENDLESS</b>' : `🏛 <b class="exp-n">${cleared}</b>/${total}`;
+    $(this.root, '.id-chip').hidden = !hasId || endless;
+  }
+
+  /** Big centre banner (Museum Cleared!, level ups). */
+  banner(title: string, subtitle: string, seconds = 3.2): void {
+    this.roomToast.innerHTML = `<b>${title}</b><span>${subtitle}</span>`;
+    this.roomToast.classList.remove('show');
+    this.roomToast.classList.add('big');
+    void this.roomToast.offsetWidth;
+    this.roomToast.classList.add('show');
+    window.clearTimeout(this.toastTimer);
+    this.bannerUntil = performance.now() + seconds * 1000;
+    this.toastTimer = window.setTimeout(() => {
+      this.roomToast.classList.remove('show', 'big');
+      this.bannerUntil = 0;
+      const next = this.pendingToast;
+      this.pendingToast = null;
+      if (next) window.setTimeout(() => this.showRoom(...next), 250);
+    }, seconds * 1000);
   }
 
   get exhibitPromptVisible(): boolean {
@@ -210,9 +274,11 @@ export class Hud {
   }
 
   /** Reading panel. `points` > 0 = first read this run; `isNew` = just added to the Archive. */
-  showExhibit(e: Exhibit, points: number, isNew: boolean): void {
+  showExhibit(e: Exhibit, reward: ExhibitReward | null, isNew: boolean): void {
     const status = [
-      points > 0 ? `<span class="ex-chip gold">+${points} Discovery!</span>` : '',
+      reward && reward.points > 0 ? `<span class="ex-chip gold">+${reward.points} score</span>` : '',
+      reward && reward.coins > 0 ? `<span class="ex-chip gold">+${reward.coins} 🪙</span>` : '',
+      reward && reward.diamonds > 0 ? `<span class="ex-chip gem">+${reward.diamonds} 💎 milestone!</span>` : '',
       isNew ? '<span class="ex-chip">📜 Bago sa Archive!</span>' : '',
     ].join('');
     $(this.exPanel, '.ex-status').innerHTML = status;
@@ -241,7 +307,7 @@ export class Hud {
   setPaused(p: boolean): void {
     this.pauseMenu.hidden = !p;
     // The prompt sits above the HUD layer; never let it cover the pause menu.
-    if (p) this.setExhibitPrompt(null, false);
+    if (p) this.setExhibitPrompt(null);
     if (p) $(this.pauseMenu, '[data-act="resume"]').focus();
   }
 
@@ -283,11 +349,18 @@ export class Hud {
   }
 
   /** Cooldown ring (`frac` 1 = ready) and active glow. DOM only changes when the rounded state does. */
-  setAbilityState(frac: number, active: boolean, secondsLeft: number): void {
-    const key = `${Math.round(frac * 100)}|${active}|${Math.ceil(secondsLeft)}`;
+  setAbilityState(frac: number, active: boolean, secondsLeft: number, lockedUntil = 0): void {
+    const key = `${Math.round(frac * 100)}|${active}|${Math.ceil(secondsLeft)}|${lockedUntil}`;
     if (key === this.abilityKey) return;
     this.abilityKey = key;
     const b = this.abilityBtn;
+    b.classList.toggle('locked', lockedUntil > 0);
+    if (lockedUntil > 0) {
+      b.style.setProperty('--cd', '0');
+      b.classList.remove('ready', 'active', 'long');
+      b.dataset.left = `🔒Lv${lockedUntil}`;
+      return;
+    }
     b.style.setProperty('--cd', String(frac));
     b.classList.toggle('ready', frac >= 1);
     b.classList.toggle('active', active);
@@ -326,11 +399,21 @@ export class Hud {
     $(this.results, '.r-time').textContent = formatTime(r.time);
     $(this.results, '.r-coins').textContent = String(r.coins);
     $(this.results, '.r-best').textContent = r.bestScore.toLocaleString('en-US');
+    $(this.results, '.r-exhibits').textContent = `${r.cleared}/${r.total}`;
+    const lv: string[] = [];
+    if (r.endlessTime > 0) lv.push(`<li class="endless">♾️ Museum cleared! Endless: ${formatTime(r.endlessTime)}</li>`);
+    const up = (who: string, l: RunResult['hero']): string =>
+      l.to > l.from ? `<li class="up">⬆️ ${who} <b>Lv ${l.to}</b>! <small>+${l.xp} XP${l.diamonds ? ` · +${l.diamonds} 💎` : ''}</small></li>` : `<li>${who} Lv ${l.to} <small>+${l.xp} XP</small></li>`;
+    lv.push(up(esc(r.heroName), r.hero), up('Player', r.player));
+    $(this.results, '.r-levels').innerHTML = lv.join('');
     $(this.results, '.r-wallet').textContent = r.wallet.toLocaleString('en-US');
     $(this.results, '.new-best').hidden = !r.newBest;
     const ms = $(this.results, '.r-missions');
-    ms.hidden = r.missions.length === 0;
-    ms.innerHTML = r.missions.map((m) => `<li>✅ Mission done: ${m.replace(/[&<>]/g, '')} <small>(claim sa lobby)</small></li>`).join('');
+    ms.hidden = r.missions.length + r.daily.length === 0;
+    ms.innerHTML = [
+      ...r.missions.map((m) => `<li>✅ Mission done: ${esc(m)} <small>(claim XP sa lobby)</small></li>`),
+      ...r.daily.map((m) => `<li>📅 Daily done: ${esc(m)} <small>(claim coins sa lobby)</small></li>`),
+    ].join('');
     this.results.hidden = false;
     $(this.results, '[data-act="replay"]').focus();
   }
@@ -344,6 +427,11 @@ export class Hud {
   }
 
   showRoom(title: string, subtitle: string): void {
+    if (performance.now() < this.bannerUntil) {
+      this.pendingToast = [title, subtitle];
+      return;
+    }
+    this.roomToast.classList.remove('big');
     this.roomToast.innerHTML = `<b>${title}</b><span>${subtitle}</span>`;
     this.roomToast.classList.remove('show');
     void this.roomToast.offsetWidth; // restart CSS animation

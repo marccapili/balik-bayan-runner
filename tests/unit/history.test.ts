@@ -78,17 +78,17 @@ describe('Discovering in a run', () => {
   it('pays the discovery bonus once per exhibit per run, never in training', () => {
     const run = new SurvivalRun(nav, sight, world, spots);
     run.reset({ x: 0, z: 0 }, 'sprint');
-    expect(run.discover('rizal')).toBe(SCORING.artifactDiscovery);
-    expect(run.discover('rizal')).toBe(0);
+    expect(run.discover('rizal').points).toBe(SCORING.artifactDiscovery);
+    expect(run.discover('rizal').points).toBe(0);
     expect(run.score.score).toBe(SCORING.artifactDiscovery);
     expect(run.score.discoveries).toBe(1);
     const ev = run.update(1 / 30, { x: 0, z: 0 });
     expect(ev.filter((e) => e.type === 'discovered')).toHaveLength(1);
     // A new run can earn it again.
     run.reset({ x: 0, z: 0 }, 'sprint');
-    expect(run.discover('rizal')).toBe(SCORING.artifactDiscovery);
+    expect(run.discover('rizal').points).toBe(SCORING.artifactDiscovery);
     run.reset({ x: 0, z: 0 }, 'sprint', true);
-    expect(run.discover('mactan')).toBe(0);
+    expect(run.discover('mactan').points).toBe(0);
     expect(run.score.score).toBe(0);
   });
 
@@ -123,7 +123,7 @@ describe('Exhibit mission', () => {
     expect(seq).toBeGreaterThanOrEqual(0);
     const m = makeMission(seq);
     expect(describeMission(m)).toMatch(/exhibit/);
-    const r = (exhibits: number): RunSummary => ({ score: 0, time: 0, runCoins: 0, coinsPicked: 0, bestMultiplier: 1, abilityUses: 0, exhibits });
+    const r = (exhibits: number): RunSummary => ({ score: 0, time: 0, runCoins: 0, coinsPicked: 0, bestMultiplier: 1, abilityUses: 0, exhibits, gamesWon: 0 });
     applyRun([m], r(1));
     applyRun([m], r(0));
     expect(m.progress).toBe(1);

@@ -36,6 +36,11 @@ export class Health {
     this.invuln = Math.max(this.invuln, seconds);
   }
 
+  /** Sets the invulnerability window exactly (debug/test hook). */
+  setInvuln(seconds: number): void {
+    this.invuln = Math.max(0, seconds);
+  }
+
   /** Returns true when the hit landed. */
   damage(): boolean {
     if (this.dead || this.invulnerable) return false;

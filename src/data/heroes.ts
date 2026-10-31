@@ -24,7 +24,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     ability: 'Mabilis na Isip',
     abilityKind: 'sprint',
     abilityBlurb: 'Sprint mode on! Bilis-takbo for a few secs.',
-    unlockCost: 0,
+    unlockCost: 500,
   },
   lapulapu: {
     id: 'lapulapu',
@@ -34,7 +34,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     ability: 'Kalasag ng Mactan',
     abilityKind: 'shield',
     abilityBlurb: 'Shield up — blocks the next hit, no cap.',
-    unlockCost: 300,
+    unlockCost: 500,
   },
   bonifacio: {
     id: 'bonifacio',
@@ -44,7 +44,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     ability: 'Sigaw ng Katipunan',
     abilityKind: 'shockwave',
     abilityBlurb: 'Shockwave! Tulak lahat ng humahabol.',
-    unlockCost: 500,
+    unlockCost: 0,
   },
   gabriela: {
     id: 'gabriela',
@@ -54,8 +54,10 @@ export const HEROES: Record<HeroId, HeroDef> = {
     ability: 'Matapang na Hakbang',
     abilityKind: 'dash',
     abilityBlurb: 'Quick dash para umiwas. Slay.',
-    unlockCost: 700,
+    unlockCost: 500,
   },
 };
 
-export const HERO_ORDER: HeroId[] = ['rizal', 'lapulapu', 'bonifacio', 'gabriela'];
+/** Bonifacio is the free starter (owner, 2026-10-31); the rest cost coins. */
+export const HERO_ORDER: HeroId[] = ['bonifacio', 'rizal', 'lapulapu', 'gabriela'];
+export const STARTER_HERO: HeroId = 'bonifacio';

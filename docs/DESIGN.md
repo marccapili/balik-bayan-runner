@@ -20,14 +20,17 @@ rewards → lobby → unlock/buy → play again. Fun first, learning through dis
 4. Heroes & progression — abilities (Rizal sprint, Lapu-Lapu shield, Bonifacio shockwave, Gabriela dash), shop, coins + Hiyas, skins, versioned save, missions. ✅
 5. Enemies & difficulty — guard dogs (telegraphed dash), multo (phasing), tikbalang (charge/illusion, reduced-effects option), data-driven director, pooling. ✅
 6. History — exhibits with E/tap prompt, pause-while-reading panels with sources, archive, folklore labelled as folklore. ✅
-7. Polish — art, animation, lighting, VFX, sound, accessibility, performance, balancing.
+7. Exhibit Mode — 15 exhibits gated by mini-games, Curator ID, Endless after all 15, hero/player levels, daily tasks, LoL-style Shop. ✅ (owner-approved plan, 2026-10-31)
+8. Polish — art, animation, lighting, VFX, sound, accessibility, performance, balancing.
 
 ## Heroes (gameplay numbers in `src/data/heroes.ts`)
 | Hero | Class | Ability | Unlock |
 |---|---|---|---|
-| José Rizal | Scholar | Mabilis na Isip (sprint) | default |
-| Lapu-Lapu | Defender | Kalasag ng Mactan (shield) | 300 coins |
-| Andrés Bonifacio | Revolutionary | Sigaw ng Katipunan (shockwave) | 500 coins |
-| Gabriela Silang | Agile Leader | Matapang na Hakbang (dash) | 700 coins |
+| Andrés Bonifacio | Revolutionary | Sigaw ng Katipunan (shockwave) | starter (free) |
+| José Rizal | Scholar | Mabilis na Isip (sprint) | 500 coins |
+| Lapu-Lapu | Defender | Kalasag ng Mactan (shield) | 500 coins |
+| Gabriela Silang | Agile Leader | Matapang na Hakbang (dash) | 500 coins |
+
+Skills unlock at hero Lv 5. Skins cost 300 diamonds. Progression numbers: `src/data/progression.ts`.
 
 Abilities are fictional gameplay interpretations, not historical claims.

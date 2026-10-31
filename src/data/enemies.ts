@@ -89,3 +89,17 @@ export const ENEMY_INTRO: Record<EnemyKind, { title: string; subtitle: string }>
   multo: { title: '👻 Multo alert!', subtitle: 'Folklore: tumatagos sa pader. Mabagal pero di napapagod' },
   tikbalang: { title: '🐴 TIKBALANG!', subtitle: 'Folklore: pag tumayo, susugod! May mga illusion pa' },
 };
+
+/**
+ * Endless Mode (after all 15 exhibits, owner spec): difficulty climbs fast until the hero is caught.
+ * A new enemy every `spawnEvery` seconds (cycling `kinds`), and chase speed keeps rising past the
+ * hero's own top speed (6.2), so every endless run ends.
+ */
+export const ENDLESS = {
+  spawnEvery: 9,
+  kinds: ['dog', 'guard', 'multo', 'tikbalang', 'dog', 'guard'] as readonly EnemyKind[],
+  maxEnemies: 22,
+  /** Chase speed grows by this per endless second, up to the cap. */
+  speedGrowth: 0.03,
+  speedCap: 7.4,
+} as const;

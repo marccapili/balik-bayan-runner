@@ -19,18 +19,21 @@ import { AbilityViews } from '../world/AbilityViews';
 import { TrainingProps } from '../world/TrainingProps';
 import { ExhibitMarkers } from '../world/ExhibitMarkers';
 import type { Exhibit } from '../data/exhibits';
-import { exhibitInReach } from '../history/exhibitMath';
+import { exhibitInReach, guideTarget, type GuideTarget } from '../history/exhibitMath';
+import { GuideViews } from '../world/GuideViews';
 import { TRAINING } from '../data/training';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
 import { DecoyView, EnemyMaterials, makeEnemyView, type EnemyView } from '../enemies/EnemyViews';
 import { SPAWN_SCHEDULE, TIKBALANG, type EnemyKind } from '../data/enemies';
-import { SurvivalRun, type RunEvent } from '../gameplay/SurvivalRun';
+import { SurvivalRun, type AbilityPerks, type RunEvent } from '../gameplay/SurvivalRun';
 import { CollisionWorld } from '../physics/Collision';
 import { dampAngle, type Vec2 } from '../utils/math';
 import { Fx } from '../world/Fx';
 import { buildMuseum, type MuseumBuild } from '../world/MuseumBuilder';
 import { PickupViews } from '../world/PickupViews';
 import type { GameScene } from './GameScene';
+
+const STILL = { x: 0, z: 0 } as const;
 
 /** The museum run: hero, guards, pickups and camera. Gameplay rules live in SurvivalRun. */
 export class MuseumScene implements GameScene {
@@ -54,6 +57,11 @@ export class MuseumScene implements GameScene {
   private readonly abilityViews: AbilityViews;
   private readonly trainingProps: TrainingProps;
   private readonly exhibitMarkers: ExhibitMarkers;
+  private readonly guide: GuideViews;
+  /** Where the floor arrow points (null in training / endless). */
+  guideTo: GuideTarget | null = null;
+  /** Hero-level ability perks for a hero (set by the Game; full strength by default). */
+  perksFor: (id: HeroId) => AbilityPerks = () => ({ abilityUnlocked: true, cooldownMult: 1, boost: 1 });
   /** Exhibit the hero can read right now (updated while playing). */
   nearExhibit: Exhibit | null = null;
   /** Whether an exhibit is already in the Archive (markers turn blue); set by the Game. */
@@ -110,6 +118,7 @@ export class MuseumScene implements GameScene {
     this.abilityViews = new AbilityViews(scene, this.fx.sparkTex);
     this.trainingProps = new TrainingProps(scene);
     this.exhibitMarkers = new ExhibitMarkers(scene);
+    this.guide = new GuideViews(scene);
     this.resetRun();
   }
 
@@ -122,7 +131,9 @@ export class MuseumScene implements GameScene {
     this.world.setExtra(training ? TRAINING.barriers : []);
     this.trainingProps.setEnabled(training);
     this.player.respawn(spawn);
-    this.run.reset(spawn, HEROES[this.player.heroId].abilityKind, training);
+    this.run.reset(spawn, HEROES[this.player.heroId].abilityKind, training, this.perksFor(this.player.heroId));
+    this.guideTo = null;
+    this.guide.hide();
     this.trainingProps.sync(this.run.dummies, 0);
     this.abilityViews.hide();
     this.cam.zoom = 1;
@@ -222,9 +233,10 @@ export class MuseumScene implements GameScene {
     return ev;
   }
 
-  update(dt: number): void {
+  /** `frozen` = the hero stands still (busy with an exhibit mini-game) while the world keeps going. */
+  update(dt: number, frozen = false): void {
     this.player.motor.speedMultiplier = this.run.speedMultiplier;
-    this.player.update(this.input.move, dt);
+    this.player.update(frozen ? STILL : this.input.move, dt);
     for (const e of this.run.update(dt, this.player.position)) this.react(e);
     const ab = this.run.ability;
     const trail = this.player.motor.dashing ? 'dash' : ab.kind === 'sprint' && ab.active ? 'sprint' : null;
@@ -240,6 +252,9 @@ export class MuseumScene implements GameScene {
       this.player.setVisible(true);
     }
     this.nearExhibit = this.run.over ? null : exhibitInReach(this.player.position);
+    const run = this.run;
+    this.guideTo = run.training || run.endless || run.over ? null : guideTarget(this.player.position, run.read, run.idCard);
+    this.guide.update(dt, this.player.position, this.guideTo?.at ?? null, run.training ? null : run.idCard);
     this.syncWorld(dt);
 
     const r = roomAt(this.player.position.x, this.player.position.z);
@@ -309,7 +324,7 @@ export class MuseumScene implements GameScene {
         if (!this.reducedEffects) this.cam.shake(FEEDBACK.hitShake, FEEDBACK.hitShakeSeconds);
         break;
       case 'ability':
-        if (e.kind === 'dash') this.player.motor.dash(e.dir, ABILITIES.dash.speed, ABILITIES.dash.duration);
+        if (e.kind === 'dash') this.player.motor.dash(e.dir, ABILITIES.dash.speed, ABILITIES.dash.duration * this.run.ability.boost);
         if (e.kind === 'shockwave') {
           this.abilityViews.shockwave(e.pos);
           if (!this.reducedEffects) this.cam.shake(0.25, 0.25);
@@ -338,6 +353,9 @@ export class MuseumScene implements GameScene {
       case 'decoyPop':
         this.fx.burst('illusion', e.pos, 1.2, 16);
         break;
+      case 'idCard':
+        this.fx.burst('rare', e.pos, 0.9, 22);
+        break;
       default:
         break;
     }
@@ -358,6 +376,7 @@ export class MuseumScene implements GameScene {
     this.portal.dispose();
     this.trainingProps.dispose();
     this.exhibitMarkers.dispose();
+    this.guide.dispose();
     this.abilityViews.dispose();
     for (const pool of this.viewPool.values()) for (const v of pool) v.dispose();
     for (const d of this.decoyViews) d.dispose();

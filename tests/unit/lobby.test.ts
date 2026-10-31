@@ -51,33 +51,35 @@ describe('IntroSequence', () => {
   });
 });
 
-const run = (score: number, time: number, runCoins: number) => ({ score, time, runCoins, coinsPicked: runCoins, bestMultiplier: 1, abilityUses: 0, exhibits: 0 });
+const run = (score: number, time: number, runCoins: number) => ({ score, time, runCoins, coinsPicked: runCoins, bestMultiplier: 1, abilityUses: 0, exhibits: 0, gamesWon: 0 });
 
 describe('SaveManager v2', () => {
   it('migrates a v1 save (keeps wallet, best, mute)', () => {
     const d = migrate({ version: 1, coins: 42, diamonds: 0, bestScore: 900, bestTime: 61.5, runs: 3, muted: true });
-    expect(d.version).toBe(4);
+    expect(d.version).toBe(5);
     expect(d.coins).toBe(42);
     expect(d.bestScore).toBe(900);
     expect(d.settings.muted).toBe(true);
-    expect(d.ownedHeroes).toEqual(['rizal']);
-    expect(d.selectedHero).toBe('rizal');
+    expect(d.ownedHeroes).toEqual(['bonifacio', 'rizal']); // pre-v5 saves keep their free Rizal
+    expect(d.selectedHero).toBe('bonifacio'); // v1 had no selection → the new starter
   });
 
   it('repairs corrupted values', () => {
-    const d = migrate({ coins: -50, ownedHeroes: ['rizal', 'batman', 'gabriela'], selectedHero: 'bonifacio', leaderboard: [{ name: '<script>', score: 5, hero: 'rizal' }, 7] });
+    const d = migrate({ version: 5, coins: -50, ownedHeroes: ['batman', 'gabriela'], selectedHero: 'lapulapu', leaderboard: [{ name: '<script>', score: 5, hero: 'rizal' }, 7] });
     expect(d.coins).toBe(0);
-    expect(d.ownedHeroes).toEqual(['rizal', 'gabriela']);
-    expect(d.selectedHero).toBe('rizal'); // not owned → falls back
+    expect(d.ownedHeroes).toEqual(['bonifacio', 'gabriela']);
+    expect(d.selectedHero).toBe('bonifacio'); // not owned → falls back to the starter
     expect(d.leaderboard).toEqual([]);
-    expect(migrate("garbage").version).toBe(4);
+    expect(migrate('garbage').version).toBe(5);
   });
 
   it('unlocks heroes without going negative or charging twice', () => {
     const s = new SaveManager(memStore());
-    s.data.coins = 350;
-    expect(s.unlockHero('bonifacio')).toBe('insufficient');
-    expect(s.data.coins).toBe(350);
+    s.data.coins = 499;
+    expect(s.unlockHero('bonifacio')).toBe('owned'); // free starter
+    expect(s.unlockHero('rizal')).toBe('insufficient');
+    expect(s.data.coins).toBe(499);
+    s.data.coins = 550;
     expect(s.unlockHero('lapulapu')).toBe('ok');
     expect(s.data.coins).toBe(50);
     expect(s.unlockHero('lapulapu')).toBe('owned');
@@ -95,7 +97,7 @@ describe('SaveManager v2', () => {
     const b = new SaveManager(store);
     expect(b.data.ownedHeroes).toContain('gabriela');
     expect(b.data.selectedHero).toBe('gabriela');
-    expect(b.data.coins).toBe(300);
+    expect(b.data.coins).toBe(500);
   });
 
   it('validates nicknames', () => {

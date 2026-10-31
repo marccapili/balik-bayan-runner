@@ -1,6 +1,18 @@
 # Development changelog
 
-## M6 History exhibits & archive — 2026-10-31 (awaiting feedback)
+## M7 Exhibit Mode, mini-games, Shop & levels — 2026-10-31 (awaiting feedback)
+- One run = Exhibit Mode then Endless. 15 exhibits (new: Spoliarium, Ifugao Rice Terraces, EDSA People Power, each sourced with a "for verification" note). Each is locked behind one of 8 original museum mini-games: Wire the Display, Curator Card Swipe, Vault Code, Balangay Navigator, Restore the Artifact, Dust the Find, Timeline Sort, Baybayin Match. Clearing pays +250 score and +20 coins; diamonds at the 5th (+20), 10th (+20) and 15th (+30) exhibit.
+- Enemies keep moving while you play a mini-game; a red "May papalapit!" warning shows when one is within 6 m, and getting hit cancels the game.
+- Card Swipe exhibits need the Curator ID first: it spawns at least 14 m away and a floor arrow guides you to it (then to the nearest uncleared exhibit).
+- After all 15: "MUSEUM CLEARED" banner, Endless Mode badge, new enemy every 9 s (up to 22) and chase speed keeps climbing until you're caught. Before that, difficulty still rises slowly, so a long run is never blocked.
+- Hero levels 1–10 (XP from time, exhibits and coins): L3 +10 💎, L4 badge, L5 skill unlocked (locked button shows 🔒Lv5), L7 cooldown −10%, L8 +10 💎, L9 ability +20% duration/reach, L10 +20 💎 and Master frame. Player level up to 300: +10 💎 per level and a new profile frame every 5 levels (60 frames).
+- Missions now give XP; 3 daily tasks give coins and reset at local midnight. Diamond exchange removed: diamonds only come from levels and exhibit milestones.
+- Shop (LoL-style): Heroes/Skins tabs, Lahat/Owned/Locked filters, cards with your character photos, detail view with Unlock/Use/Train and Try on/Buy/Equip. Bonifacio is the free starter; other heroes 500 coins; skins 300 diamonds. Hero arrows removed from the lobby.
+- Gabriela's dash cooldown is now 20 s. Save v5 (migrates v1–v4; old saves keep Rizal).
+- Small fix: big banners no longer get overwritten by a room/enemy toast; the toast waits its turn.
+- Tests: 137 unit, 146 browser checks (mini-game gate, ID card, payout once, enemies move during games, danger warning, hit cancels, Endless, Shop flow, phone mini-game by touch).
+
+## M6 History exhibits & archive — 2026-10-31
 - 12 exhibits across all five galleries (`src/data/exhibits.ts`): Battle of Mactan, Rizal and the Propaganda Movement, Bonifacio and the Katipunan, Gabriela Silang and the Ilocos revolt (Hall of Heroes); the flag's sun and stars, the Butuan balangay (Main Gallery); Manunggul Jar, Laguna Copperplate Inscription (Artifacts); Baybayin, American and Japanese rule (Library); Tikbalang, the balete and multo (Folklore).
 - Every entry has a source list (NHCP, National Museum, RA 8491, Pigafetta, Schumacher, Agoncillo, Constantino, W. H. Scott, Postma, R. B. Fox, M. D. Ramos). Points that differ between sources are shown in an orange "For verification" box (date/place of the Cry, Gabriela's dates, balangay dating) and the panel gives only what is certain.
 - Folklore entries are labelled "Folklore · alamat, hindi history" and say the game's creature powers are made up. Every panel and the Archive carry the fiction note (time travel, powers and the chase are fiction).

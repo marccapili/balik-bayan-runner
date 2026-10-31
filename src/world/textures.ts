@@ -222,6 +222,40 @@ export function portraitTexture(scene: Scene, variant: number): DynamicTexture {
   });
 }
 
+/**
+ * Big dark history-painting canvas for the Spoliarium exhibit: a loose, original impression
+ * (torchlit arena chamber, pale figures) — deliberately not a copy of Luna's composition.
+ */
+export function paintingTexture(scene: Scene): DynamicTexture {
+  return tex(scene, 'painting', 256, 134, (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 256, 0);
+    g.addColorStop(0, '#2a1610');
+    g.addColorStop(0.55, '#4a2a1a');
+    g.addColorStop(1, '#1c0f0b');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 134);
+    const light = ctx.createRadialGradient(150, 50, 4, 150, 50, 90);
+    light.addColorStop(0, 'rgba(255,190,110,0.55)');
+    light.addColorStop(1, 'rgba(255,190,110,0)');
+    ctx.fillStyle = light;
+    ctx.fillRect(0, 0, 256, 134);
+    ctx.fillStyle = 'rgba(230,200,160,0.8)';
+    ctx.beginPath();
+    ctx.ellipse(120, 100, 52, 9, -0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(196, 104, 30, 7, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(20,10,8,0.85)';
+    for (const [x, h] of [
+      [40, 70],
+      [62, 60],
+      [228, 66],
+    ] as const)
+      ctx.fillRect(x, 118 - h, 12, h);
+  });
+}
+
 /** Translucent capiz-shell window grid. */
 export function capizTexture(scene: Scene): DynamicTexture {
   return tex(scene, 'capiz', 128, 128, (ctx) => {

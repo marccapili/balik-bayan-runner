@@ -270,15 +270,18 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   check('game opens on the lobby', (await snap(page)).state === 'lobby');
   await page.screenshot({ path: `${OUT}/m3-lobby.png` });
 
-  for (const panel of ['heroes', 'leaderboard', 'settings', 'profile']) {
+  for (const panel of ['leaderboard', 'settings', 'profile', 'missions', 'daily', 'archive']) {
     await page.click(`.lobby [data-act="${panel}"]`);
     await wait(150);
     const open = (await snap(page)).lobbyPanel === panel && (await page.isVisible('.lobby .sheet'));
-    if (panel === 'heroes') await page.screenshot({ path: `${OUT}/m3-heroes.png` });
+    if (panel === 'daily') await page.screenshot({ path: `${OUT}/m7-daily.png` });
     await page.click('.lobby [data-act="close"]');
     await wait(150);
     check(`lobby ${panel} panel opens and closes`, open && (await snap(page)).lobbyPanel === null);
   }
+  check('no hero arrows in the lobby (heroes are picked in the Shop)', (await page.locator('.lobby [data-act="next"], .lobby [data-act="prev"]').count()) === 0);
+  const fresh = await snap(page);
+  check('Bonifacio is the free starter', fresh.save.selectedHero === 'bonifacio' && fresh.save.ownedHeroes.join() === 'bonifacio', fresh.save.ownedHeroes.join());
 
   await page.click('.lobby [data-act="settings"]');
   await page.click('.lobby [data-act="mute"]');
@@ -304,21 +307,40 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   check('profile nickname validates and saves', bad && (await snap(page)).save.nickname === 'Rei Tester');
   await page.click('.lobby [data-act="close"]');
 
-  await page.click('.lobby [data-act="next"]');
-  await wait(200);
-  const nx = await snap(page);
-  check('next arrow previews the next hero', nx.previewHero === 'lapulapu');
-  await page.click('.lobby [data-act="play"]', { force: true });
+  // ── M7 Shop / Collection: left tabs, cards with portraits + prices, choose hero there ──
+  await page.click('.lb-left [data-act="collection"]');
   await wait(300);
-  check('locked hero cannot start a run without coins', (await snap(page)).state === 'lobby' && !(await snap(page)).save.ownedHeroes.includes('lapulapu'));
-  await page.evaluate(() => window.__bbr.debug.addCoins(300));
-  await page.click('.lobby [data-act="play"]');
+  check('Shop opens full screen on the Heroes tab', (await snap(page)).lobbyPanel === 'collection' && (await page.isVisible('.col-tab.on[data-tab="heroes"]')));
+  check('hero cards show photos and 500-coin prices', (await page.locator('.ccard img').count()) === 4 && (await page.locator('.ccard.locked .c-price').allTextContents()).every((t) => t.includes('500')));
+  await page.screenshot({ path: `${OUT}/m7-shop-heroes.png` });
+  await page.click('.chip[data-f="owned"]');
+  check('Owned filter shows only Bonifacio', (await page.locator('.ccard').count()) === 1);
+  await page.click('.chip[data-f="all"]');
+  await page.click('.ccard[data-id="lapulapu"]');
+  await wait(200);
+  check('locked hero detail: Buy is disabled without coins', await page.isDisabled('.col-detail [data-act="unlock"]'));
+  await page.evaluate(() => window.__bbr.debug.addCoins(500));
+  await wait(100);
+  await page.click('.col-detail [data-act="unlock"]');
   await wait(200);
   const un = await snap(page);
-  check('PLAY on a locked hero unlocks it when affordable', un.state === 'lobby' && un.save.ownedHeroes.includes('lapulapu') && un.save.coins === 0 && un.save.selectedHero === 'lapulapu');
-  await page.click('.lobby [data-act="prev"]');
+  check('buying a hero costs 500 and selects it', un.save.ownedHeroes.includes('lapulapu') && un.save.coins === 0 && un.save.selectedHero === 'lapulapu');
+  await page.screenshot({ path: `${OUT}/m7-shop-detail.png` });
+  await page.click('[data-act="detailBack"]');
+  await page.click('.ccard[data-id="bonifacio"]');
+  await page.click('.col-detail [data-act="use"]');
+  await wait(150);
+  check('"Gamitin" switches the hero', (await snap(page)).save.selectedHero === 'bonifacio');
+  await page.click('[data-act="detailBack"]');
+  await page.click('.col-tab[data-tab="skins"]');
   await wait(200);
-  check('prev arrow goes back and selects owned hero', (await snap(page)).save.selectedHero === 'rizal');
+  check('Skins tab lists skins with 300-diamond prices', (await page.locator('.ccard.skin').count()) === 8 && (await page.locator('.ccard.skin .c-price.gem').first().textContent()).includes('300'));
+  await page.screenshot({ path: `${OUT}/m7-shop-skins.png` });
+  await page.keyboard.press('Escape');
+  const te = Date.now();
+  while ((await snap(page)).lobbyPanel !== null && Date.now() - te < 3000) await wait(100);
+  check('Esc closes the Shop', (await snap(page)).lobbyPanel === null);
+  check('hero card shows the locked skill (hero Lv 1)', /Lv 5/.test(await page.textContent('.hc-ab-text')));
 
   await page.click('.lobby [data-act="play"]');
   await wait(300);
@@ -350,7 +372,8 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 
 // ── M4 hero abilities, shop, missions ──
 {
-  const allHeroes = (hero) => ({ version: 3, coins: 900, diamonds: 40, ownedHeroes: ['rizal', 'lapulapu', 'bonifacio', 'gabriela'], selectedHero: hero });
+  // Hero XP 850 = level 5, so every ability is unlocked (M7: skills unlock at hero Lv 5).
+  const allHeroes = (hero) => ({ version: 5, coins: 900, diamonds: 400, ownedHeroes: ['rizal', 'lapulapu', 'bonifacio', 'gabriela'], selectedHero: hero, heroXp: { rizal: 850, lapulapu: 850, bonifacio: 850, gabriela: 850 } });
   const desk = { viewport: { width: 1280, height: 720 } };
   const pollUntil = async (page, pred, maxMs = 10000) => {
     const t0 = Date.now();
@@ -373,6 +396,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     await wait(300);
     const s2 = await snap(page);
     check('dash fires once (no repeating effect)', s2.abilityEvents === 1, `events=${s2.abilityEvents}`);
+    check('Gabriela dash cooldown is 20 s', s2.ability.cooldownLeft > 15 && s2.ability.cooldownLeft <= 20, `left=${s2.ability.cooldownLeft?.toFixed(1)}`);
     check('ability respects its cooldown', s2.ability.uses === 1 && !s2.ability.ready && (await page.getAttribute('.ability-btn', 'data-left')) !== '');
     await page.screenshot({ path: `${OUT}/m4-dash.png` });
     check('no console errors (dash)', errors.length === 0, errors.slice(0, 3).join(' | '));
@@ -438,8 +462,9 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto(URL);
     await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
-    await page.click('.lobby [data-act="next"]');
-    await page.click('.lobby [data-act="train"]');
+    await page.click('.lb-left [data-act="collection"]');
+    await page.click('.ccard[data-id="lapulapu"]');
+    await page.click('.col-detail [data-act="train"]');
     const tr = await pollUntil(page, (s) => s.state === 'playing' && s.training, 15000);
     check('Training starts with a locked hero (no purchase)', tr.training && tr.hero === 'lapulapu' && !tr.save.ownedHeroes.includes('lapulapu'));
     await wait(1500);
@@ -456,10 +481,10 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     check('Training room is closed off (rope barrier)', wall.z > 0, `z=${wall.z?.toFixed(2)}`);
     await page.click('.train-tag [data-act="lobby"]');
     const back = await pollUntil(page, (s) => s.state === 'lobby', 10000);
-    check('Training Exit returns to the lobby, nothing unlocked', back.state === 'lobby' && !back.training && back.hero === 'rizal' && !back.save.ownedHeroes.includes('lapulapu'));
+    check('Training Exit returns to the lobby, nothing unlocked', back.state === 'lobby' && !back.training && back.hero === 'bonifacio' && !back.save.ownedHeroes.includes('lapulapu'));
     await page.click('.lobby [data-act="play"]');
     const run = await pollUntil(page, (s) => s.state === 'intro', 15000);
-    check('normal PLAY after training is a real run again', run.state === 'intro' && !run.training && run.hero === 'rizal');
+    check('normal PLAY after training is a real run again', run.state === 'intro' && !run.training && run.hero === 'bonifacio');
     check('no console errors (training)', errors.length === 0, errors.slice(0, 3).join(' | '));
     await ctx.close();
   }
@@ -474,36 +499,58 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto(URL);
     await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
-    await page.click('.lobby [data-act="shop"]');
-    await page.click('[data-act="exchange"]');
-    let s = await snap(page);
-    check('shop exchange: 200 coins → 5 Hiyas', s.save.coins === 700 && s.save.diamonds === 45);
-    await page.click('[data-act="try"][data-skin="lapulapu.dagat"]');
+    check('no diamond exchange anywhere', (await page.locator('[data-act="exchange"]').count()) === 0);
+    await page.click('.lb-left [data-act="collection"]');
+    await page.click('.col-tab[data-tab="skins"]');
+    await page.click('.ccard[data-id="lapulapu.dagat"]');
+    await page.click('.col-detail [data-act="try"]');
     await wait(150);
-    check('Try on previews a skin without buying it', (await snap(page)).previewHero === 'lapulapu' && !(await snap(page)).save.ownedSkins.includes('lapulapu.dagat'));
-    await page.click('[data-act="buy"][data-skin="rizal.puti"]');
+    let s = await snap(page);
+    check('Try on previews a skin without buying it', s.lobbyPanel === null && !s.save.ownedSkins.includes('lapulapu.dagat'));
+    await page.click('.lb-left [data-act="collection"]');
+    await page.click('.col-tab[data-tab="skins"]');
+    await page.click('.ccard[data-id="rizal.puti"]');
+    await page.click('.col-detail [data-act="buy"]');
     await wait(150);
     s = await snap(page);
-    check('buying a skin spends Hiyas and equips it', s.save.ownedSkins.includes('rizal.puti') && s.save.equippedSkins.rizal === 'rizal.puti' && s.save.diamonds === 15 && s.skin === 'rizal.puti');
-    await page.click('[data-act="equip"][data-skin="rizal.classic"]');
+    check('buying a skin spends 300 diamonds and equips it', s.save.ownedSkins.includes('rizal.puti') && s.save.equippedSkins.rizal === 'rizal.puti' && s.save.diamonds === 100 && s.skin === 'rizal.puti');
+    await page.click('[data-act="detailBack"]');
+    await page.click('.ccard[data-id="rizal.classic"]');
+    await page.click('.col-detail [data-act="equip"]');
     await wait(150);
     check('equip switches back to an owned skin', (await snap(page)).save.equippedSkins.rizal === 'rizal.classic');
-    await page.click('.lobby [data-act="close"]');
+    await page.click('[data-act="detailBack"]');
+    await page.click('[data-act="closeCollection"]');
     await page.evaluate(() => window.__bbr.debug.finishMissions());
-    check('missions badge shows claimable rewards', await page.isVisible('.lobby .badge'));
+    check('missions badge shows claimable rewards', await page.isVisible('.lobby .m-badge'));
     await page.click('.lobby [data-act="missions"]');
     s = await snap(page);
     const first = s.save.missions[0];
     await page.click(`[data-act="claim"][data-seq="${first.seq}"]`);
     await wait(150);
     const c = await snap(page);
-    check('claiming a mission pays out once and brings a new one', c.save.coins === s.save.coins + first.coins && c.save.diamonds === s.save.diamonds + first.hiyas && c.save.missions[0].seq !== first.seq);
+    check('claiming a mission pays player XP (not coins) once and brings a new one', c.save.playerXp === s.save.playerXp + first.xp && c.save.coins === s.save.coins && c.save.missions[0].seq !== first.seq);
     await page.screenshot({ path: `${OUT}/m4-missions.png` });
+    await page.click('.lobby [data-act="close"]');
+    // Daily tasks: finish one through the save, claim it for coins.
+    await page.evaluate(() => {
+      const t = window.__bbr.save.data.daily.tasks[0];
+      t.progress = t.target;
+      window.__bbr.save.save();
+      window.__bbr.debug.addCoins(0);
+    });
+    check('daily badge shows a claimable task', await page.isVisible('.lobby .d-badge'));
+    await page.click('.lobby [data-act="daily"]');
+    const d0 = await snap(page);
+    await page.click('[data-act="claimDaily"][data-i="0"]');
+    await wait(150);
+    const d1 = await snap(page);
+    check('claiming a daily task pays coins once', d1.save.coins === d0.save.coins + d0.save.daily.tasks[0].coins && d1.save.daily.tasks[0].claimed && (await page.locator('[data-act="claimDaily"][data-i="0"]').count()) === 0);
     await page.click('.lobby [data-act="close"]');
     await page.reload();
     await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
     const r = await snap(page);
-    check('shop + mission progress survive a reload', r.save.ownedSkins.includes('rizal.puti') && r.save.missions[0].seq === c.save.missions[0].seq);
+    check('shop, mission and daily progress survive a reload', r.save.ownedSkins.includes('rizal.puti') && r.save.missions[0].seq === c.save.missions[0].seq && r.save.daily.tasks[0].claimed);
     check('no console errors (shop + missions)', errors.length === 0, errors.slice(0, 3).join(' | '));
     await ctx.close();
   }
@@ -573,7 +620,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await ctx.close();
 }
 
-// ── M6 history exhibits: prompt, reading panel pauses the run, discovery bonus once, archive ──
+// ── M6/M7 exhibits: mini-game gate, Curator ID, payout once, Endless, archive ──
 {
   const { ctx, page, errors } = await bootPage(browser, { viewport: { width: 1280, height: 720 } }, '?play');
   const until = async (pred, maxMs = 10000) => {
@@ -586,24 +633,44 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     return s;
   };
   await until((s) => s.guards.length >= 1);
-  // Rizal's statue in the Hall of Heroes: stand just in front of it.
+  check('HUD shows exhibit progress 0/15', /0\s*\/\s*15/.test(await page.textContent('.exp-chip')));
+  check('Bonifacio Lv1: ability is locked until Lv5', (await snap(page)).abilityLocked && /Lv5/.test((await page.getAttribute('.ability-btn', 'data-left')) ?? ''));
   await page.evaluate(() => {
     window.__bbr.debug.setInvulnerable(1e6);
     window.__bbr.debug.teleport(25, 4.9);
   });
   const near = await until((s) => s.exhibitPrompt);
-  check('walking up to an exhibit shows the Discover prompt', near.exhibitPrompt && near.nearExhibit === 'rizal', `near=${near.nearExhibit}`);
-  check('prompt says "Press E to Discover History"', /Press\s*E\s*to Discover History/i.test(await page.textContent('.exhibit-prompt')));
-  await page.screenshot({ path: `${OUT}/m6-prompt.png` });
-  const before = await snap(page);
+  check('walking up to an exhibit shows its prompt', near.exhibitPrompt && near.nearExhibit === 'rizal', `near=${near.nearExhibit}`);
+  check('Card Swipe exhibit asks for the Curator ID first', /Curator ID/.test(await page.textContent('.exhibit-prompt')));
   await page.keyboard.press('e');
-  const open = await until((s) => s.state === 'reading', 4000);
-  check('E opens the history panel and freezes the run', open.state === 'reading' && open.exhibitOpen);
+  await wait(300);
+  check('E without the ID does not open the mini-game', !(await snap(page)).mini);
+  await page.screenshot({ path: `${OUT}/m7-need-id.png` });
+  await page.evaluate(() => window.__bbr.debug.giveIdCard());
+  const got = await until((s) => s.hasIdCard, 5000);
+  check('picking up the Curator ID card', got.hasIdCard);
+  await page.evaluate(() => window.__bbr.debug.teleport(25, 4.9));
+  await until((s) => s.exhibitPrompt && s.nearExhibit === 'rizal');
+  check('prompt now offers the mini-game', /Mini-game/.test(await page.textContent('.exhibit-prompt')));
+  await page.keyboard.press('e');
+  const mg = await until((s) => !!s.mini, 4000);
+  check('E opens the Card Swipe mini-game', mg.mini?.kind === 'swipe' && mg.state === 'playing');
+  await page.screenshot({ path: `${OUT}/m7-swipe.png` });
+  // Enemies keep moving while the hero is busy with the mini-game.
+  const g0 = (await snap(page)).guards;
+  await wait(1500);
+  const g1 = (await snap(page)).guards;
+  check('enemies keep moving during a mini-game', g1.some((g, i) => g0[i] && Math.hypot(g.x - g0[i].x, g.z - g0[i].z) > 0.05));
+  const before = await snap(page);
+  await page.evaluate(() => window.__bbr.debug.winMiniGame());
+  const open = await until((s) => s.state === 'reading', 6000);
+  check('winning the mini-game opens the history panel', open.state === 'reading' && open.exhibitOpen);
   const panelText = await page.textContent('.exhibit-panel');
   check('panel shows title, sources and the fiction note', /Propaganda Movement/.test(panelText) && /Sources/.test(panelText) && /Schumacher/.test(panelText) && /Fiction/.test(panelText));
-  check('first read pays the discovery bonus', open.score === before.score + 250 && /\+250 Discovery/.test(panelText), `score ${before.score} → ${open.score}`);
+  check('clearing pays +250 score and +20 coins', open.score === before.score + 250 && open.runCoins === before.runCoins + 20, `score ${before.score}→${open.score}, coins ${before.runCoins}→${open.runCoins}`);
+  check('exhibit counter shows 1/15', open.cleared === 1);
   await page.screenshot({ path: `${OUT}/m6-panel.png` });
-  await wait(1200);
+  await wait(1000);
   const still = await snap(page);
   const moved = still.guards.some((g, i) => Math.hypot(g.x - open.guards[i].x, g.z - open.guards[i].z) > 0.01);
   check('while reading: timer, score and enemies are frozen', still.runTime === open.runTime && still.score === open.score && !moved && still.state === 'reading');
@@ -611,38 +678,72 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const closed = await until((s) => s.state === 'playing', 4000);
   check('E closes the panel and resumes with a short grace', closed.state === 'playing' && !closed.exhibitOpen && closed.invulnerable);
   check('the exhibit is saved to the archive', closed.save.discovered.includes('rizal'));
-  // Re-reading the same exhibit in the same run pays nothing; the prompt button works too.
+  await until((s) => s.exhibitPrompt);
+  check('cleared exhibit offers a re-read', /Basahin ulit/.test(await page.textContent('.exhibit-prompt')));
   await page.click('.exhibit-prompt');
   const again = await until((s) => s.state === 'reading', 4000);
-  check('clicking the prompt opens the panel too', again.state === 'reading');
-  check('re-reading the same exhibit pays nothing', again.score === closed.score, `${closed.score} → ${again.score}`);
+  check('clicking the prompt re-opens the panel (no mini-game)', again.state === 'reading' && !again.mini);
+  check('re-reading the same exhibit pays nothing', again.score === closed.score && again.runCoins === closed.runCoins, `${closed.score} → ${again.score}`);
   await page.keyboard.press('Escape');
   await until((s) => s.state === 'playing', 4000);
-  // Folklore exhibit is clearly labelled.
-  await page.evaluate(() => window.__bbr.debug.teleport(23.8, -19.5));
-  await until((s) => s.nearExhibit === 'tikbalang');
+  // Danger warning + a hit cancels the mini-game.
+  await page.evaluate(() => window.__bbr.debug.teleport(16, 4.9));
+  await until((s) => s.nearExhibit === 'mactan');
   await page.keyboard.press('e');
-  await until((s) => s.state === 'reading', 4000);
+  await until((s) => !!s.mini, 4000);
+  const p = await snap(page);
+  await page.evaluate(([x, z]) => {
+    window.__bbr.debug.setInvulnerable(0);
+    window.__bbr.debug.spawnEnemy('guard', x + 3, z);
+  }, [p.x, p.z]);
+  await page.waitForFunction(() => !document.querySelector('.mg-danger')?.hidden, null, { timeout: 8000 }).catch(() => {});
+  check('danger warning shows when an enemy gets close', !(await page.locator('.mg-danger').first().isHidden()));
+  await page.screenshot({ path: `${OUT}/m7-danger.png` });
+  const hit = await until((s) => !s.mini, 15000);
+  check('getting caught cancels the mini-game', !hit.mini && hit.hearts < p.hearts, `hearts ${p.hearts}→${hit.hearts}`);
+  await page.evaluate(() => window.__bbr.debug.setInvulnerable(1e6));
+  // Folklore exhibit is clearly labelled (via a cleared re-read path: win its game).
+  await page.evaluate(() => window.__bbr.debug.setPeaceful(true));
+  let fm = null;
+  for (let tries = 0; tries < 3 && !fm?.mini; tries++) {
+    await page.evaluate(() => window.__bbr.debug.teleport(23.8, -19.5));
+    await until((s) => s.nearExhibit === 'tikbalang' && s.exhibitPrompt);
+    await page.keyboard.press('e');
+    fm = await until((s) => !!s.mini, 4000);
+  }
+  await page.evaluate(() => window.__bbr.debug.winMiniGame());
+  const fr = await until((s) => s.state === 'reading', 15000);
+  if (fr.state !== 'reading') console.log('  folklore debug:', JSON.stringify({ state: fr.state, mini: fr.mini, near: fr.nearExhibit, x: fr.x, z: fr.z, hearts: fr.hearts }));
   const folk = await page.textContent('.exhibit-panel');
   check('folklore exhibit is labelled folklore, not history', /Folklore · alamat, hindi history/.test(folk) && /Ramos/.test(folk));
   await page.screenshot({ path: `${OUT}/m6-folklore.png` });
   await page.click('[data-act="closeExhibit"]');
   await until((s) => s.state === 'playing', 4000);
+  await page.evaluate(() => window.__bbr.debug.setPeaceful(false));
+  // Clear the rest → Endless.
+  const pre = await snap(page);
+  await page.evaluate(() => window.__bbr.debug.clearExhibits(15));
+  const end = await until((s) => s.endless, 4000);
+  check('clearing all 15 starts Endless Mode', end.endless && end.cleared === 15);
+  await wait(300);
+  check('Endless banner + HUD badge', /ENDLESS/.test(await page.textContent('.exp-chip')) && /MUSEUM CLEARED/.test(await page.textContent('.room-toast')));
+  await page.screenshot({ path: `${OUT}/m7-endless.png` });
+  const later = await until((s) => s.endlessTime > 3, 60000);
+  check('Endless ramps the chase speed', later.chaseSpeed > pre.chaseSpeed, `${pre.chaseSpeed} → ${later.chaseSpeed}`);
   // Archive in the lobby.
   await page.keyboard.press('Escape');
   await wait(200);
   await page.click('.pause-menu [data-act="lobby"]');
   await until((s) => s.state === 'lobby', 10000);
   await wait(900);
-  check('Archive button shows discoveries', /2\/\d+/.test(await page.textContent('.arch-count')));
+  check('Archive button shows discoveries out of 15', /2\/15/.test(await page.textContent('.arch-count')), await page.textContent('.arch-count'));
   await page.click('[data-act="archive"]');
   await wait(200);
-  check('Archive lists found exhibits and hides the rest', (await page.locator('.ex-tile.found').count()) === 2 && (await page.locator('.ex-tile:not(.found)').count()) > 0);
+  check('Archive lists found exhibits and hides the rest', (await page.locator('.ex-tile.found').count()) === 2 && (await page.locator('.ex-tile:not(.found)').count()) === 13);
   await page.screenshot({ path: `${OUT}/m6-archive.png` });
   await page.click('.ex-tile.found[data-id="rizal"]');
   await wait(200);
   check('tapping a found exhibit opens it in the Archive', /Propaganda Movement/.test(await page.textContent('.sheet-body')));
-  await page.screenshot({ path: `${OUT}/m6-archive-entry.png` });
   await page.click('[data-act="archiveBack"]');
   await page.reload();
   await page.waitForFunction(() => ['lobby', 'playing'].includes(window.__bbr?.fsm.state), null, { timeout: 30000 });
@@ -654,7 +755,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 
 // ── Phone (landscape + portrait) with touch joystick ──
 for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }], ['phone-portrait', { width: 390, height: 844 }]]) {
-  const { ctx, page, errors } = await bootPage(browser, { viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  const { ctx, page, errors } = await bootPage(browser, { viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }, '?peaceful&play', { version: 5, heroXp: { bonifacio: 850 } });
   const s0 = await snap(page);
   const cdp = await ctx.newCDPSession(page);
   const sx = Math.round(viewport.width * 0.2);
@@ -691,7 +792,26 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   while (!(await snap(page)).exhibitPrompt && Date.now() - tw < 5000) await wait(80);
   await page.tap('.exhibit-prompt');
   await wait(250);
-  check(`${label}: tapping the exhibit prompt opens the panel`, (await snap(page)).state === 'reading');
+  check(`${label}: tapping the exhibit prompt opens its mini-game`, (await snap(page)).mini?.kind === 'restore');
+  await page.screenshot({ path: `${OUT}/${label}-minigame.png` });
+  // Solve the swap puzzle with real taps.
+  for (let n = 0; n < 12; n++) {
+    const order = await page.$$eval('.rs-tile', (els) => els.map((e) => e.classList.contains('right')));
+    const wrong = order.indexOf(false);
+    if (wrong < 0) break;
+    const target = await page.evaluate((w) => {
+      const tiles = [...document.querySelectorAll('.rs-tile')];
+      const pos = tiles[w].style.backgroundPosition.split(' ').map(parseFloat);
+      const piece = Math.round(pos[1] / 50) * 3 + Math.round(pos[0] / 50);
+      return piece;
+    }, wrong);
+    await page.tap(`.rs-tile[data-i="${wrong}"]`);
+    await page.tap(`.rs-tile[data-i="${target}"]`);
+    await wait(80);
+  }
+  const tr0 = Date.now();
+  while ((await snap(page)).state !== 'reading' && Date.now() - tr0 < 20000) await wait(150);
+  check(`${label}: solving the puzzle by touch opens the exhibit panel`, (await snap(page)).state === 'reading');
   await page.screenshot({ path: `${OUT}/${label}-exhibit.png` });
   await page.tap('[data-act="closeExhibit"]');
   await wait(250);
@@ -704,9 +824,15 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   check(`${label}: pause → lobby works on touch`, (await snap(page)).state === 'lobby');
   await wait(1200);
   await page.screenshot({ path: `${OUT}/${label}-lobby.png` });
-  await page.tap('[data-act="heroes"]');
+  await page.tap('.lb-left [data-act="collection"]');
+  await wait(300);
+  check(`${label}: Shop opens on touch`, (await snap(page)).lobbyPanel === 'collection');
+  await page.screenshot({ path: `${OUT}/${label}-shop.png` });
+  await page.tap('.ccard[data-id="gabriela"]');
   await wait(200);
-  check(`${label}: Heroes button opens on touch`, (await snap(page)).lobbyPanel === 'heroes');
+  await page.screenshot({ path: `${OUT}/${label}-shop-detail.png` });
+  await page.tap('[data-act="detailBack"]');
+  await page.tap('[data-act="closeCollection"]');
   check(`no console errors (${label})`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }
