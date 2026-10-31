@@ -274,11 +274,11 @@ export class LobbyScene implements GameScene {
     }
   }
 
-  setHero(id: HeroId): void {
-    if (id === this.heroId) return;
+  setHero(id: HeroId, skin?: string): void {
+    if (id === this.heroId && (!skin || skin === this.rig?.skin)) return;
     if (this.rig) disposeHero(this.rig);
     this.heroId = id;
-    this.rig = buildHero(this.scene, id);
+    this.rig = buildHero(this.scene, id, skin);
     this.rig.root.parent = this.holder;
     this.rig.root.scaling.setAll(HERO_SCALE);
     this.rig.root.rotation.y = Math.PI;

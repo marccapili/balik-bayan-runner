@@ -2,7 +2,7 @@
  * Tiny synthesised sound effects (Web Audio, no files, no licensing).
  * The AudioContext is created on the first user gesture to satisfy autoplay rules.
  */
-export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock';
+export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -120,6 +120,32 @@ export class Sfx {
         break;
       case 'unlock':
         [523, 659, 784, 1047].forEach((f, i) => this.tone(f, t + i * 0.08, 0.22, 'triangle', 0.12));
+        break;
+      case 'sprint':
+        this.tone(440, t, 0.25, 'square', 0.05, 1200);
+        this.tone(660, t + 0.08, 0.2, 'triangle', 0.08, 1500);
+        break;
+      case 'shield':
+        this.tone(392, t, 0.4, 'triangle', 0.1, 523);
+        this.tone(784, t + 0.05, 0.4, 'sine', 0.06, 1046);
+        break;
+      case 'shockwave':
+        this.noise(t, 0.45, 0.5, 900);
+        this.tone(160, t, 0.45, 'sawtooth', 0.12, 50);
+        break;
+      case 'dash':
+        this.noise(t, 0.18, 0.3, 3200);
+        this.tone(700, t, 0.15, 'sine', 0.06, 1400);
+        break;
+      case 'block':
+        this.tone(1200, t, 0.12, 'square', 0.07, 900);
+        this.tone(600, t + 0.03, 0.25, 'triangle', 0.1, 300);
+        break;
+      case 'denied':
+        this.tone(180, t, 0.12, 'square', 0.05);
+        break;
+      case 'claim':
+        [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, t + i * 0.06, 0.2, 'sine', 0.1));
         break;
     }
   }

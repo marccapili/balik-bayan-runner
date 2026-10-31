@@ -1,4 +1,5 @@
-/** Hero roster. Gameplay numbers here; look/colour spec lives in heroLooks.ts. */
+/** Hero roster. Gameplay numbers here; ability tuning in abilities.ts, skins in skins.ts. */
+import type { AbilityKind } from './abilities';
 
 export type HeroId = 'rizal' | 'lapulapu' | 'bonifacio' | 'gabriela';
 
@@ -8,6 +9,7 @@ export interface HeroDef {
   title: string;
   heroClass: string;
   ability: string;
+  abilityKind: AbilityKind;
   /** Short, playful ability blurb for the UI. */
   abilityBlurb: string;
   unlockCost: number;
@@ -20,6 +22,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     title: 'Ang Pambansang Bayani',
     heroClass: 'Scholar',
     ability: 'Mabilis na Isip',
+    abilityKind: 'sprint',
     abilityBlurb: 'Sprint mode on! Bilis-takbo for a few secs.',
     unlockCost: 0,
   },
@@ -29,6 +32,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     title: 'Datu ng Mactan',
     heroClass: 'Defender',
     ability: 'Kalasag ng Mactan',
+    abilityKind: 'shield',
     abilityBlurb: 'Shield up — blocks the next hit, no cap.',
     unlockCost: 300,
   },
@@ -38,6 +42,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     title: 'Supremo ng Katipunan',
     heroClass: 'Revolutionary',
     ability: 'Sigaw ng Katipunan',
+    abilityKind: 'shockwave',
     abilityBlurb: 'Shockwave! Tulak lahat ng humahabol.',
     unlockCost: 500,
   },
@@ -47,6 +52,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     title: 'Tapang ng Ilocos',
     heroClass: 'Agile Leader',
     ability: 'Matapang na Hakbang',
+    abilityKind: 'dash',
     abilityBlurb: 'Quick dash para umiwas. Slay.',
     unlockCost: 700,
   },

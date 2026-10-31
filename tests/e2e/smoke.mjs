@@ -39,8 +39,9 @@ async function holdUntil(page, keys, pred, maxMs = 15000) {
 }
 
 // Movement/collision checks run with ?peaceful (no guards) so a hit can't nudge the hero.
-async function bootPage(browser, opts, query = '?peaceful&play') {
+async function bootPage(browser, opts, query = '?peaceful&play', save = null) {
   const ctx = await browser.newContext(opts);
+  if (save) await ctx.addInitScript((s) => localStorage.setItem('bbr.save', JSON.stringify(s)), save);
   const page = await ctx.newPage();
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -347,6 +348,127 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await ctx.close();
 }
 
+// ── M4 hero abilities, shop, missions ──
+{
+  const allHeroes = (hero) => ({ version: 3, coins: 900, diamonds: 40, ownedHeroes: ['rizal', 'lapulapu', 'bonifacio', 'gabriela'], selectedHero: hero });
+  const desk = { viewport: { width: 1280, height: 720 } };
+  const pollUntil = async (page, pred, maxMs = 10000) => {
+    const t0 = Date.now();
+    let s = await snap(page);
+    while (!pred(s) && Date.now() - t0 < maxMs) {
+      await wait(100);
+      s = await snap(page);
+    }
+    return s;
+  };
+
+  // Gabriela: dash bursts forward, then cools down.
+  {
+    const { ctx, page, errors } = await bootPage(browser, desk, '?peaceful&play', allHeroes('gabriela'));
+    const s0 = await snap(page);
+    await page.keyboard.press('Space');
+    const s1 = await pollUntil(page, (s) => s.ability.uses === 1 && Math.hypot(s.x - s0.x, s.z - s0.z) > 2.5, 5000);
+    check('Gabriela dash: Space bursts the hero forward', s1.ability.kind === 'dash' && Math.hypot(s1.x - s0.x, s1.z - s0.z) > 2.5, `moved ${Math.hypot(s1.x - s0.x, s1.z - s0.z).toFixed(2)}`);
+    await page.keyboard.press('Space');
+    await wait(300);
+    const s2 = await snap(page);
+    check('ability respects its cooldown', s2.ability.uses === 1 && !s2.ability.ready && (await page.getAttribute('.ability-btn', 'data-left')) !== '');
+    await page.screenshot({ path: `${OUT}/m4-dash.png` });
+    check('no console errors (dash)', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await ctx.close();
+  }
+
+  // Rizal: sprint raises top speed.
+  {
+    const { ctx, page, errors } = await bootPage(browser, desk, '?peaceful&play', allHeroes('rizal'));
+    await page.click('[data-act="ability"]');
+    const s = await holdUntil(page, ['KeyD'], (x) => x.speed > 7.5, 6000);
+    check('Rizal sprint: ability button speeds the hero up', s.speedMultiplier > 1.4 && s.speed > 7.5, `speed ${s.speed?.toFixed(2)} x${s.speedMultiplier}`);
+    await page.screenshot({ path: `${OUT}/m4-sprint.png` });
+    check('no console errors (sprint)', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await ctx.close();
+  }
+
+  // Lapu-Lapu: shield blocks a hit.
+  {
+    const { ctx, page, errors } = await bootPage(browser, desk, '?play', allHeroes('lapulapu'));
+    await pollUntil(page, (s) => s.runTime > 2.3 && !s.invulnerable, 10000);
+    await page.keyboard.press('Space');
+    const up = await pollUntil(page, (s) => s.shielded, 3000);
+    check('Lapu-Lapu shield goes up', up.shielded);
+    await page.screenshot({ path: `${OUT}/m4-shield.png` });
+    // Push the guard into the hero until the shield is spent.
+    const t0 = Date.now();
+    let s = await snap(page);
+    while (s.shielded && Date.now() - t0 < 6000) {
+      await page.evaluate(([x, z]) => window.__bbr.debug.moveGuard(0, x + 0.3, z), [s.x, s.z]);
+      await wait(100);
+      s = await snap(page);
+    }
+    check('shield blocks the hit (no heart lost) and is spent', !s.shielded && s.hearts === 3 && s.guards[0].state === 'stunned', `hearts=${s.hearts} guard=${s.guards[0]?.state}`);
+    check('no console errors (shield)', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await ctx.close();
+  }
+
+  // Bonifacio: shockwave stuns a nearby guard.
+  {
+    const { ctx, page, errors } = await bootPage(browser, desk, '?play', allHeroes('bonifacio'));
+    const s0 = await pollUntil(page, (s) => s.guards.length > 0, 5000);
+    await page.evaluate(([x, z]) => window.__bbr.debug.moveGuard(0, x + 2, z), [s0.x, s0.z]);
+    await page.keyboard.press('Space');
+    const s1 = await pollUntil(page, (s) => s.ability.uses === 1, 3000);
+    check('Bonifacio shockwave stuns and shoves a nearby guard', s1.guards[0].state === 'stunned' && Math.hypot(s1.guards[0].x - s1.x, s1.guards[0].z - s1.z) > 3,
+      `guard=${s1.guards[0].state} d=${Math.hypot(s1.guards[0].x - s1.x, s1.guards[0].z - s1.z).toFixed(2)}`);
+    await page.screenshot({ path: `${OUT}/m4-shockwave.png` });
+    check('no console errors (shockwave)', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await ctx.close();
+  }
+
+  // Shop + missions in the lobby.
+  {
+    const ctx = await browser.newContext(desk);
+    await ctx.addInitScript((s) => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('bbr.save', JSON.stringify(s)); sessionStorage.setItem('seeded', '1'); } }, allHeroes('rizal'));
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
+    await page.click('.lobby [data-act="shop"]');
+    await page.click('[data-act="exchange"]');
+    let s = await snap(page);
+    check('shop exchange: 200 coins → 5 Hiyas', s.save.coins === 700 && s.save.diamonds === 45);
+    await page.click('[data-act="try"][data-skin="lapulapu.dagat"]');
+    await wait(150);
+    check('Try on previews a skin without buying it', (await snap(page)).previewHero === 'lapulapu' && !(await snap(page)).save.ownedSkins.includes('lapulapu.dagat'));
+    await page.click('[data-act="buy"][data-skin="rizal.puti"]');
+    await wait(150);
+    s = await snap(page);
+    check('buying a skin spends Hiyas and equips it', s.save.ownedSkins.includes('rizal.puti') && s.save.equippedSkins.rizal === 'rizal.puti' && s.save.diamonds === 15 && s.skin === 'rizal.puti');
+    await page.click('[data-act="equip"][data-skin="rizal.classic"]');
+    await wait(150);
+    check('equip switches back to an owned skin', (await snap(page)).save.equippedSkins.rizal === 'rizal.classic');
+    await page.click('.lobby [data-act="close"]');
+    await page.evaluate(() => window.__bbr.debug.finishMissions());
+    check('missions badge shows claimable rewards', await page.isVisible('.lobby .badge'));
+    await page.click('.lobby [data-act="missions"]');
+    s = await snap(page);
+    const first = s.save.missions[0];
+    await page.click(`[data-act="claim"][data-seq="${first.seq}"]`);
+    await wait(150);
+    const c = await snap(page);
+    check('claiming a mission pays out once and brings a new one', c.save.coins === s.save.coins + first.coins && c.save.diamonds === s.save.diamonds + first.hiyas && c.save.missions[0].seq !== first.seq);
+    await page.screenshot({ path: `${OUT}/m4-missions.png` });
+    await page.click('.lobby [data-act="close"]');
+    await page.reload();
+    await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
+    const r = await snap(page);
+    check('shop + mission progress survive a reload', r.save.ownedSkins.includes('rizal.puti') && r.save.missions[0].seq === c.save.missions[0].seq);
+    check('no console errors (shop + missions)', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await ctx.close();
+  }
+}
+
 // ── Phone (landscape + portrait) with touch joystick ──
 for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }], ['phone-portrait', { width: 390, height: 844 }]]) {
   const { ctx, page, errors } = await bootPage(browser, { viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
@@ -376,6 +498,9 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await page.screenshot({ path: `${OUT}/${label}-pause.png` });
   await page.tap('[data-act="resume"]');
   await wait(200);
+  await page.tap('[data-act="ability"]');
+  await wait(300);
+  check(`${label}: ability button works on touch`, (await snap(page)).ability.uses === 1);
   await page.screenshot({ path: `${OUT}/${label}.png` });
   await page.tap('[data-act="pause"]');
   await wait(150);

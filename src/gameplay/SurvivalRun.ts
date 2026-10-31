@@ -1,9 +1,11 @@
 import type { NavGrid } from '../ai/NavGrid';
+import { ABILITIES, type AbilityKind } from '../data/abilities';
 import { PLAYER_CONFIG } from '../data/config';
 import { GUARD, GUARD_SCHEDULE, MAX_GUARDS } from '../data/gameplay';
 import { GuardBrain } from '../enemies/GuardBrain';
 import type { CollisionWorld } from '../physics/Collision';
 import { clamp, lerp, type Vec2 } from '../utils/math';
+import { Ability } from './Ability';
 import { Health } from './Health';
 import { PickupField, type PickupKind } from './PickupField';
 import { ScoreKeeper } from './ScoreKeeper';
@@ -14,6 +16,8 @@ export type RunEvent =
   | { type: 'alert'; guard: number }
   | { type: 'bonus'; points: number }
   | { type: 'guardJoined'; guard: number }
+  | { type: 'ability'; kind: AbilityKind; pos: Vec2; dir: Vec2; affected: number }
+  | { type: 'blocked'; pos: Vec2; guard: number }
   | { type: 'dead' };
 
 /**
@@ -23,6 +27,7 @@ export type RunEvent =
 export class SurvivalRun {
   health = new Health();
   score = new ScoreKeeper();
+  ability = new Ability('sprint');
   readonly pickups: PickupField;
   readonly guards: GuardBrain[] = [];
   over = false;
@@ -41,8 +46,9 @@ export class SurvivalRun {
   }
 
   /** Clean state for a new run (replay never inherits anything from the last one). */
-  reset(player: Vec2): void {
+  reset(player: Vec2, ability: AbilityKind = this.ability.kind): void {
     this.health = new Health();
+    this.ability = new Ability(ability);
     this.score = new ScoreKeeper();
     this.score.onBonus = (points) => this.events.push({ type: 'bonus', points });
     this.pickups.reset(player);
@@ -78,11 +84,53 @@ export class SurvivalRun {
     return lerp(GUARD.chaseSpeedStart, GUARD.chaseSpeedMax, clamp(this.score.time / GUARD.speedRampSeconds, 0, 1));
   }
 
+  /** Hero top-speed multiplier from the current ability (Rizal's sprint). */
+  get speedMultiplier(): number {
+    return this.ability.kind === 'sprint' && this.ability.active ? ABILITIES.sprint.speedMultiplier : 1;
+  }
+
+  /** True while Lapu-Lapu's shield is up. */
+  get shielded(): boolean {
+    return this.ability.kind === 'shield' && this.ability.active;
+  }
+
+  /**
+   * Fires the hero's ability if it is ready. `facing` is the hero's unit facing direction (dash direction).
+   * Movement effects (sprint speed, dash burst) are applied by the scene from the 'ability' event / `speedMultiplier`.
+   */
+  useAbility(player: Vec2, facing: Vec2): boolean {
+    if (this.over || !this.ability.trigger()) return false;
+    let affected = 0;
+    if (this.ability.kind === 'shockwave') {
+      const w = ABILITIES.shockwave;
+      for (const g of this.guards) {
+        const dx = g.pos.x - player.x;
+        const dz = g.pos.z - player.z;
+        const d = Math.hypot(dx, dz);
+        if (d > w.radius) continue;
+        const dir = d > 1e-4 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
+        // Closer guards get shoved further; collision keeps them out of walls.
+        const push = w.push * (1 - (d / w.radius) * 0.5);
+        g.pos = this.world.move(g.pos, { x: dir.x * push, z: dir.z * push }, GUARD.radius);
+        g.vel = { x: 0, z: 0 };
+        g.stun(w.stun);
+        affected++;
+      }
+    } else if (this.ability.kind === 'dash') {
+      this.health.grantInvuln(ABILITIES.dash.invulnerable);
+    }
+    this.events.push({ type: 'ability', kind: this.ability.kind, pos: { ...player }, dir: { ...facing }, affected });
+    return true;
+  }
+
+  /** Events raised outside `update` (ability use) are delivered with the next update. */
   update(dt: number, player: Vec2): RunEvent[] {
-    this.events = [];
+    const pending = this.events.filter((e) => e.type === 'ability');
+    this.events = pending;
     if (this.over) return this.events;
     this.score.update(dt);
     this.health.update(dt);
+    this.ability.update(dt);
 
     for (const got of this.pickups.update(dt, player, this.health.hearts < this.health.max)) {
       if (got.kind === 'heart') {
@@ -143,8 +191,18 @@ export class SurvivalRun {
       const dx = player.x - g.pos.x;
       const dz = player.z - g.pos.z;
       const d = Math.hypot(dx, dz);
-      if (d > reach || !this.health.damage()) continue;
+      if (d > reach) continue;
       const dir = d > 1e-4 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
+      if (this.shielded && !this.health.invulnerable) {
+        // Kalasag: the hit bounces off, the guard staggers back, the shield is spent.
+        this.ability.end();
+        this.health.grantInvuln(0.5);
+        g.pos = this.world.move(g.pos, { x: -dir.x * 1.2, z: -dir.z * 1.2 }, GUARD.radius);
+        g.stun(ABILITIES.shield.blockStun);
+        this.events.push({ type: 'blocked', pos: { ...player }, guard: this.guards.indexOf(g) });
+        continue;
+      }
+      if (!this.health.damage()) continue;
       g.stun(GUARD.hitRecoverSeconds);
       this.score.breakCombo();
       this.events.push({ type: 'hit', pos: { ...player }, dir, hearts: this.health.hearts });

@@ -17,7 +17,7 @@ rewards → lobby → unlock/buy → play again. Fun first, learning through dis
 1. Foundation — project, engine, state machine, museum, follow camera, player controller, keyboard + joystick. ✅
 2. Core survival — guard AI (patrol/alert/chase/search/stunned, A* on layout grid), 3 hearts, i-frames, coins, score + multiplier, timer, game over, replay. ✅
 3. Lobby & cinematic intro — 3D hero preview lobby, working nav, PLAY portal transition, float/tap-to-drop/fall/land, guard detection. ✅
-4. Heroes & progression — abilities (Rizal sprint, Lapu-Lapu shield, Bonifacio shockwave, Gabriela dash), shop, coins + Hiyas, skins, versioned save, missions.
+4. Heroes & progression — abilities (Rizal sprint, Lapu-Lapu shield, Bonifacio shockwave, Gabriela dash), shop, coins + Hiyas, skins, versioned save, missions. ✅
 5. Enemies & difficulty — guard dogs (telegraphed dash), multo (phasing), tikbalang (charge/illusion, reduced-effects option), data-driven director, pooling.
 6. History — exhibits with E/tap prompt, pause-while-reading panels with sources, archive, folklore labelled as folklore.
 7. Polish — art, animation, lighting, VFX, sound, accessibility, performance, balancing.

@@ -3,7 +3,9 @@ import { Sfx } from '../audio/Sfx';
 import { InputManager } from '../controls/InputManager';
 import { RENDER_CONFIG } from '../data/config';
 import { FEEDBACK } from '../data/gameplay';
-import type { HeroId } from '../data/heroes';
+import { ABILITIES } from '../data/abilities';
+import { HEROES, type HeroId } from '../data/heroes';
+import { describe } from '../gameplay/Missions';
 import type { IntroEvent } from '../gameplay/IntroSequence';
 import type { RunEvent } from '../gameplay/SurvivalRun';
 import { LobbyScene } from '../scenes/LobbyScene';
@@ -72,7 +74,7 @@ export class Game {
     onProgress(0.55, 'Ginigising ang mga bayani…');
     await this.museum.scene.whenReadyAsync();
     this.lobbyScene = new LobbyScene(this.engine, this.canvas);
-    this.lobbyScene.setHero(this.heroId);
+    this.lobbyScene.setHero(this.heroId, this.save.skinOf(this.heroId));
     onProgress(0.85, 'Inaayos ang lobby…');
     await this.lobbyScene.scene.whenReadyAsync();
     onProgress(1, 'Game na!');
@@ -86,11 +88,13 @@ export class Game {
       onDrop: () => {
         this.dropRequested = true;
       },
+      onAbility: () => this.input.press('ability'),
       onToggleMute: () => this.toggleMute(),
     });
     this.lobby = new Lobby(this.uiRoot, this.save, {
       onPlay: () => void this.play(),
-      onPreview: (id) => this.lobbyScene?.setHero(id),
+      onPreview: (id, skin) => this.lobbyScene?.setHero(id, skin ?? this.save.skinOf(id)),
+      onPurchase: (kind) => this.sfx.play(kind === 'claim' ? 'claim' : 'unlock'),
       onUnlock: (id) => {
         const r = this.save.unlockHero(id);
         if (r === 'ok') this.sfx.play('unlock');
@@ -105,7 +109,7 @@ export class Game {
       onReset: () => {
         this.save.reset();
         this.applySettings();
-        this.lobbyScene?.setHero(this.heroId);
+        this.lobbyScene?.setHero(this.heroId, this.save.skinOf(this.heroId));
       },
       onClick: () => this.sfx.play('click'),
     });
@@ -137,7 +141,7 @@ export class Game {
     this.lobby?.setVisible(true);
     if (this.lobbyScene) {
       this.lobbyScene.active = true;
-      this.lobbyScene.setHero(this.heroId);
+      this.lobbyScene.setHero(this.heroId, this.save.skinOf(this.heroId));
     }
   }
 
@@ -145,7 +149,10 @@ export class Game {
     document.body.dataset.mode = 'museum';
     this.lobby?.setVisible(false);
     if (this.lobbyScene) this.lobbyScene.active = false;
-    this.museum?.setHero(this.heroId);
+    const id = this.heroId;
+    this.museum?.setHero(id, this.save.skinOf(id));
+    const h = HEROES[id];
+    this.hud?.setAbility(ABILITIES[h.abilityKind].icon, h.ability);
   }
 
   /** PLAY: lobby slides out → portal wipe → museum reveal with the hero hovering. */
@@ -217,6 +224,10 @@ export class Game {
       this.dropRequested = false;
       for (const e of this.museum.updateIntro(dt, drop)) this.onIntroEvent(e);
     } else if (state === 'playing' && this.museum) {
+      if (this.input.consume('ability') && !this.museum.useAbility()) {
+        this.sfx.play('denied');
+        this.hud?.abilityDenied();
+      }
       this.simTime += dt;
       this.museum.update(dt);
       this.pushStats();
@@ -291,6 +302,8 @@ export class Game {
     const run = this.museum?.run;
     if (!run || !this.hud) return;
     this.hud.setStats({ hearts: run.health.hearts, score: run.score.score, coins: run.score.runCoins, time: run.score.time, multiplier: run.score.multiplier });
+    const ab = run.ability;
+    this.hud.setAbilityState(ab.cooldownFrac, ab.active || run.shielded, ab.cooldownLeft);
   }
 
   private onRunEvent(e: RunEvent): void {
@@ -315,6 +328,20 @@ export class Game {
       case 'alert':
         this.sfx.play('alert');
         break;
+      case 'ability': {
+        this.sfx.play(e.kind);
+        if (e.kind === 'shockwave' && e.affected > 0) {
+          const p = m.toScreen(e.pos, 2.4);
+          hud?.floatText(p.x, p.y, e.affected > 1 ? `${e.affected} guards stunned!` : 'Guard stunned!', 'bonus');
+        }
+        break;
+      }
+      case 'blocked': {
+        this.sfx.play('block');
+        const p = m.toScreen(e.pos, 2.2);
+        hud?.floatText(p.x, p.y, 'Blocked! 🛡️', 'bonus');
+        break;
+      }
       case 'guardJoined':
         if (e.guard > 0) hud?.showRoom('👮 May bagong guard!', 'Dumami sila, bilisan mo pa');
         break;
@@ -337,14 +364,19 @@ export class Game {
   private showResults(): void {
     const run = this.museum?.run;
     if (!run) return;
-    const newBest = this.save.recordRun(run.score.score, run.score.time, run.score.runCoins, this.heroId);
+    const s = run.score;
+    const rec = this.save.recordRun(
+      { score: s.score, time: s.time, runCoins: s.runCoins, coinsPicked: s.coinsPicked, bestMultiplier: s.bestMultiplier, abilityUses: run.ability.uses },
+      this.heroId,
+    );
     this.hud?.showResults({
       score: run.score.score,
       time: run.score.time,
       coins: run.score.runCoins,
       bestScore: this.save.data.bestScore,
-      newBest,
+      newBest: rec.newBest,
       wallet: this.save.data.coins,
+      missions: rec.completedMissions.map(describe),
     });
   }
 
@@ -365,13 +397,23 @@ export class Game {
       this.save.save();
       this.lobby?.refresh();
     },
+    addHiyas: (n) => {
+      this.save.data.diamonds += Math.max(0, Math.floor(n));
+      this.save.save();
+      this.lobby?.refresh();
+    },
+    finishMissions: () => {
+      for (const m of this.save.data.missions) m.progress = m.target;
+      this.save.save();
+      this.lobby?.refresh();
+    },
   };
 
   /** Selects an owned hero (used by tools/tests; the lobby UI goes through the same save call). */
   setHero(id: HeroId): void {
     if (!this.save.selectHero(id)) return;
-    this.museum?.setHero(id);
-    this.lobbyScene?.setHero(id);
+    this.museum?.setHero(id, this.save.skinOf(id));
+    this.lobbyScene?.setHero(id, this.save.skinOf(id));
     this.lobby?.refresh();
   }
 
@@ -386,6 +428,10 @@ export class Game {
       runCoins: run?.score.runCoins,
       runTime: run?.score.time,
       guards: run?.guards.map((g) => ({ x: g.pos.x, z: g.pos.z, state: g.state, hunting: g.hunting })),
+      ability: run && { kind: run.ability.kind, ready: run.ability.ready, active: run.ability.active, uses: run.ability.uses, cooldownLeft: run.ability.cooldownLeft },
+      shielded: run?.shielded ?? false,
+      speedMultiplier: p?.motor.speedMultiplier,
+      skin: this.save.skinOf(this.heroId),
       coins: run?.pickups.items.filter((i) => i.active).map((i) => ({ kind: i.kind, x: i.pos.x, z: i.pos.z })),
       results: this.hud?.resultsVisible ?? false,
       introPhase: this.museum?.introPhase ?? null,
@@ -412,6 +458,8 @@ export interface DebugHooks {
   moveGuard(i: number, x: number, z: number): void;
   setPeaceful(p: boolean): void;
   addCoins(n: number): void;
+  addHiyas(n: number): void;
+  finishMissions(): void;
 }
 
 const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));

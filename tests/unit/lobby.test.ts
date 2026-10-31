@@ -51,10 +51,12 @@ describe('IntroSequence', () => {
   });
 });
 
+const run = (score: number, time: number, runCoins: number) => ({ score, time, runCoins, coinsPicked: runCoins, bestMultiplier: 1, abilityUses: 0 });
+
 describe('SaveManager v2', () => {
   it('migrates a v1 save (keeps wallet, best, mute)', () => {
     const d = migrate({ version: 1, coins: 42, diamonds: 0, bestScore: 900, bestTime: 61.5, runs: 3, muted: true });
-    expect(d.version).toBe(2);
+    expect(d.version).toBe(3);
     expect(d.coins).toBe(42);
     expect(d.bestScore).toBe(900);
     expect(d.settings.muted).toBe(true);
@@ -68,7 +70,7 @@ describe('SaveManager v2', () => {
     expect(d.ownedHeroes).toEqual(['rizal', 'gabriela']);
     expect(d.selectedHero).toBe('rizal'); // not owned → falls back
     expect(d.leaderboard).toEqual([]);
-    expect(migrate('garbage').version).toBe(2);
+    expect(migrate('garbage').version).toBe(3);
   });
 
   it('unlocks heroes without going negative or charging twice', () => {
@@ -107,15 +109,15 @@ describe('SaveManager v2', () => {
   it('leaderboard keeps one best row per nickname, sorted, capped', () => {
     const s = new SaveManager(memStore());
     s.setNickname('Rei');
-    s.recordRun(500, 40, 3, 'rizal');
-    s.recordRun(300, 20, 1, 'rizal');
+    s.recordRun(run(500, 40, 3), 'rizal');
+    s.recordRun(run(300, 20, 1), 'rizal');
     expect(s.data.leaderboard).toHaveLength(1);
     expect(s.data.leaderboard[0]!.score).toBe(500);
-    s.recordRun(800, 50, 2, 'rizal');
+    s.recordRun(run(800, 50, 2), 'rizal');
     expect(s.data.leaderboard[0]!.score).toBe(800);
     for (let i = 0; i < 15; i++) {
       s.setNickname(`P${i}x`);
-      s.recordRun(100 + i, 10, 0, 'rizal');
+      s.recordRun(run(100 + i, 10, 0), 'rizal');
     }
     expect(s.data.leaderboard).toHaveLength(LEADERBOARD.size);
     expect(s.data.leaderboard[0]!.name).toBe('Rei');

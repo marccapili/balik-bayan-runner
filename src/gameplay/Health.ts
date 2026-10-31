@@ -31,6 +31,11 @@ export class Health {
     if (this.invuln > 0) this.invuln -= dt;
   }
 
+  /** Extra invulnerability (Gabriela's dash). Never shortens an existing window. */
+  grantInvuln(seconds: number): void {
+    this.invuln = Math.max(this.invuln, seconds);
+  }
+
   /** Returns true when the hit landed. */
   damage(): boolean {
     if (this.dead || this.invulnerable) return false;

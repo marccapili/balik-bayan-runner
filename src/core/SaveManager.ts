@@ -1,8 +1,12 @@
 import { HERO_ORDER, HEROES, type HeroId } from '../data/heroes';
 import { LEADERBOARD } from '../data/lobby';
+import { MISSIONS } from '../data/missions';
+import { classicSkin, EXCHANGE, SKIN_BY_ID, SKINS } from '../data/skins';
+import { applyRun, isDone, makeMission, type Mission, type RunSummary } from '../gameplay/Missions';
 
 /**
- * Versioned local save. v2 adds owned/selected heroes, nickname, local leaderboard and settings.
+ * Versioned local save. v2 adds owned/selected heroes, nickname, local leaderboard and settings;
+ * v3 adds skins (owned + equipped per hero) and missions.
  * Anything missing, corrupted or from an older version goes through `migrate`.
  */
 export interface LeaderboardEntry {
@@ -21,7 +25,7 @@ export interface Settings {
 }
 
 export interface SaveData {
-  version: 2;
+  version: 3;
   coins: number;
   diamonds: number;
   bestScore: number;
@@ -32,16 +36,34 @@ export interface SaveData {
   selectedHero: HeroId;
   leaderboard: LeaderboardEntry[];
   settings: Settings;
+  ownedSkins: string[];
+  equippedSkins: Record<HeroId, string>;
+  missions: Mission[];
+  /** Next mission sequence number. */
+  missionSeq: number;
 }
 
+/** What `recordRun` reports back to the results screen. */
+export interface RunRecord {
+  newBest: boolean;
+  completedMissions: Mission[];
+}
+
+export type ShopResult = 'ok' | 'owned' | 'insufficient' | 'locked';
+
 const KEY = 'bbr.save';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 const isHero = (v: unknown): v is HeroId => typeof v === 'string' && v in HEROES;
 
+const classicSkins = (): Record<HeroId, string> =>
+  Object.fromEntries(HERO_ORDER.map((h) => [h, classicSkin(h)])) as Record<HeroId, string>;
+
+const freshMissions = (): Mission[] => Array.from({ length: MISSIONS.active }, (_, i) => makeMission(i));
+
 export function defaultSave(): SaveData {
   return {
-    version: 2,
+    version: 3,
     coins: 0,
     diamonds: 0,
     bestScore: 0,
@@ -52,7 +74,21 @@ export function defaultSave(): SaveData {
     selectedHero: 'rizal',
     leaderboard: [],
     settings: { muted: false, reducedEffects: false },
+    ownedSkins: SKINS.filter((s) => s.cost === 0).map((s) => s.id),
+    equippedSkins: classicSkins(),
+    missions: freshMissions(),
+    missionSeq: MISSIONS.active,
   };
+}
+
+function migrateMission(raw: unknown): Mission | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.seq !== 'number' || !Number.isInteger(r.seq) || r.seq < 0) return null;
+  // Rebuild from the pool so a tampered target/reward can't stick; only progress is kept.
+  const m = makeMission(r.seq);
+  m.progress = Math.min(m.target, num(r.progress));
+  return m;
 }
 
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
@@ -87,8 +123,24 @@ export function migrate(raw: unknown): SaveData {
   const leaderboard = Array.isArray(r.leaderboard)
     ? (r.leaderboard.map(migrateEntry).filter(Boolean) as LeaderboardEntry[]).sort((a, b) => b.score - a.score).slice(0, LEADERBOARD.size)
     : [];
+  const ownedSkins = SKINS.filter((sk) => sk.cost === 0 || (Array.isArray(r.ownedSkins) && r.ownedSkins.includes(sk.id))).map((sk) => sk.id);
+  const eqRaw = (r.equippedSkins && typeof r.equippedSkins === 'object' ? r.equippedSkins : {}) as Record<string, unknown>;
+  const equippedSkins = classicSkins();
+  for (const h of HERO_ORDER) {
+    const id = eqRaw[h];
+    if (typeof id === 'string' && SKIN_BY_ID[id]?.hero === h && ownedSkins.includes(id)) equippedSkins[h] = id;
+  }
+  const seen = new Set<number>();
+  let missions = (Array.isArray(r.missions) ? r.missions.map(migrateMission) : []).filter((m): m is Mission => !!m && !seen.has(m.seq) && !!seen.add(m.seq));
+  let missionSeq = Math.max(num(r.missionSeq), ...missions.map((m) => m.seq + 1), 0);
+  if (!Array.isArray(r.missions)) {
+    missions = freshMissions();
+    missionSeq = MISSIONS.active;
+  }
+  while (missions.length < MISSIONS.active) missions.push(makeMission(missionSeq++));
+  missions = missions.slice(0, MISSIONS.active);
   return {
-    version: 2,
+    version: 3,
     coins: num(r.coins),
     diamonds: num(r.diamonds),
     bestScore: num(r.bestScore),
@@ -100,6 +152,10 @@ export function migrate(raw: unknown): SaveData {
     leaderboard,
     // v1 kept `muted` at the top level.
     settings: { muted: s.muted === true || r.muted === true, reducedEffects: s.reducedEffects === true },
+    ownedSkins,
+    equippedSkins,
+    missions,
+    missionSeq,
   };
 }
 
@@ -159,17 +215,72 @@ export class SaveManager {
     return true;
   }
 
-  /** Applies a finished run. Returns whether it set a new best score. */
-  recordRun(score: number, time: number, runCoins: number, hero: HeroId, today = new Date()): boolean {
+  /** Applies a finished run: wallet, bests, leaderboard and mission progress. */
+  recordRun(r: RunSummary, hero: HeroId, today = new Date()): RunRecord {
     const d = this.data;
+    const { score, time } = r;
     d.runs += 1;
-    d.coins += Math.max(0, Math.floor(runCoins));
+    d.coins += Math.max(0, Math.floor(r.runCoins));
     const best = score > d.bestScore;
     if (best) d.bestScore = Math.floor(score);
     if (time > d.bestTime) d.bestTime = time;
     if (score > 0) this.addToLeaderboard({ name: this.displayName, score: Math.floor(score), time, hero, date: today.toISOString().slice(0, 10) });
+    const completedMissions = applyRun(d.missions, r).map((m) => ({ ...m }));
     this.save();
-    return best;
+    return { newBest: best, completedMissions };
+  }
+
+  /** Pays out a completed mission and replaces it with the next one. Returns the reward, or null. */
+  claimMission(seq: number): { coins: number; hiyas: number } | null {
+    const d = this.data;
+    const i = d.missions.findIndex((m) => m.seq === seq);
+    const m = d.missions[i];
+    if (!m || !isDone(m)) return null;
+    d.coins += m.coins;
+    d.diamonds += m.hiyas;
+    d.missions.splice(i, 1, makeMission(d.missionSeq++));
+    this.save();
+    return { coins: m.coins, hiyas: m.hiyas };
+  }
+
+  get claimableMissions(): number {
+    return this.data.missions.filter(isDone).length;
+  }
+
+  /** Buys a skin with Hiyas. The hero must be owned first. */
+  buySkin(id: string): ShopResult {
+    const d = this.data;
+    const s = SKIN_BY_ID[id];
+    if (!s) return 'locked';
+    if (d.ownedSkins.includes(id)) return 'owned';
+    if (!d.ownedHeroes.includes(s.hero)) return 'locked';
+    if (d.diamonds < s.cost) return 'insufficient';
+    d.diamonds -= s.cost;
+    d.ownedSkins = SKINS.filter((x) => x.id === id || d.ownedSkins.includes(x.id)).map((x) => x.id);
+    this.save();
+    return 'ok';
+  }
+
+  equipSkin(id: string): boolean {
+    const s = SKIN_BY_ID[id];
+    if (!s || !this.data.ownedSkins.includes(id)) return false;
+    this.data.equippedSkins[s.hero] = id;
+    this.save();
+    return true;
+  }
+
+  skinOf(hero: HeroId): string {
+    return this.data.equippedSkins[hero] ?? classicSkin(hero);
+  }
+
+  /** Trades coins for Hiyas at the fixed shop rate. */
+  exchange(): boolean {
+    const d = this.data;
+    if (d.coins < EXCHANGE.coins) return false;
+    d.coins -= EXCHANGE.coins;
+    d.diamonds += EXCHANGE.hiyas;
+    this.save();
+    return true;
   }
 
   /** One row per nickname (their best run), top N by score. */

@@ -19,6 +19,8 @@ export class PlayerMotor {
   state: MotorState;
   /** Multiplier from abilities (e.g. Rizal's sprint) — 1 = normal. */
   speedMultiplier = 1;
+  private dashLeft = 0;
+  private dashVel: Vec2 = { x: 0, z: 0 };
 
   constructor(
     start: Vec2,
@@ -30,6 +32,25 @@ export class PlayerMotor {
 
   reset(start: Vec2, yaw = Math.PI): void {
     this.state = { pos: { ...start }, vel: { x: 0, z: 0 }, yaw };
+    this.speedMultiplier = 1;
+    this.dashLeft = 0;
+  }
+
+  /** Unit vector the hero is facing. */
+  get facing(): Vec2 {
+    return { x: Math.sin(this.state.yaw), z: Math.cos(this.state.yaw) };
+  }
+
+  get dashing(): boolean {
+    return this.dashLeft > 0;
+  }
+
+  /** Burst along `dir` at `speed` for `seconds`, ignoring input (walls still stop it). */
+  dash(dir: Vec2, speed: number, seconds: number): void {
+    const l = length2(dir.x, dir.z) || 1;
+    this.dashVel = { x: (dir.x / l) * speed, z: (dir.z / l) * speed };
+    this.dashLeft = seconds;
+    this.state.yaw = Math.atan2(dir.x, dir.z);
   }
 
   get speed(): number {
@@ -47,10 +68,20 @@ export class PlayerMotor {
     const target = { x: input.x * max, z: input.z * max };
     const hasInput = length2(input.x, input.z) > 0.01;
 
-    // Brake harder when the new direction opposes current velocity — no ice-skating.
-    let rate: number = hasInput ? this.cfg.acceleration : this.cfg.deceleration;
-    if (hasInput && s.vel.x * target.x + s.vel.z * target.z < 0) rate = this.cfg.turnBrake;
-    s.vel = moveTowards(s.vel, target, rate * dt);
+    if (this.dashLeft > 0) {
+      this.dashLeft -= dt;
+      s.vel = { ...this.dashVel };
+      // Leave the dash at running speed instead of sliding to a stop.
+      if (this.dashLeft <= 0) {
+        const sp = length2(s.vel.x, s.vel.z) || 1;
+        s.vel = { x: (s.vel.x / sp) * max, z: (s.vel.z / sp) * max };
+      }
+    } else {
+      // Brake harder when the new direction opposes current velocity — no ice-skating.
+      let rate: number = hasInput ? this.cfg.acceleration : this.cfg.deceleration;
+      if (hasInput && s.vel.x * target.x + s.vel.z * target.z < 0) rate = this.cfg.turnBrake;
+      s.vel = moveTowards(s.vel, target, rate * dt);
+    }
 
     const before = s.pos;
     const after = this.world.move(before, { x: s.vel.x * dt, z: s.vel.z * dt }, this.cfg.radius);
@@ -63,7 +94,7 @@ export class PlayerMotor {
     }
     s.pos = after;
 
-    if (hasInput) {
+    if (hasInput && this.dashLeft <= 0) {
       const desiredYaw = Math.atan2(input.x, input.z);
       s.yaw = dampAngle(s.yaw, desiredYaw, this.cfg.turnSharpness, dt);
     }

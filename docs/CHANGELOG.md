@@ -1,5 +1,17 @@
 # Development changelog
 
+## M4 Hero abilities, shop & missions — 2026-10-31 (awaiting feedback)
+- Abilities (Space on desktop, round ability button on phones, cooldown ring + seconds left; tuning in `src/data/abilities.ts`):
+  - Rizal, Mabilis na Isip: sprint ×1.55 top speed for 3.5 s, 12 s cooldown.
+  - Lapu-Lapu, Kalasag ng Mactan: shield bubble for up to 8 s that blocks the next hit and stuns that guard, 15 s cooldown.
+  - Bonifacio, Sigaw ng Katipunan: shockwave ring that stuns (2.5 s) and shoves every guard within 5 m, 16 s cooldown.
+  - Gabriela, Matapang na Hakbang: quick dash (~5 m) with brief invulnerability, 6 s cooldown. Walls still stop it.
+- Shop (lobby): one extra skin per hero (colourways only, no stat boosts) for 30 Hiyas each; "Try on" preview; equip any owned skin; coins → Hiyas exchange (200 → 5). No real-money store.
+- Missions (lobby): 3 active missions from a fixed pool (coins in a run, survive time, score, combo, ability uses, runs, total coins). Claim pays coins/Hiyas and brings the next mission; later cycles get harder and pay more. Results screen lists missions completed by the run; badge shows claimable rewards.
+- Save v3 (migrates v1/v2): owned/equipped skins, missions; tampered mission targets/rewards are rebuilt from the pool.
+- New sounds for each ability, block, denied (on cooldown) and claim.
+- Tests: 77 unit, 80 browser checks (each ability in a live run, cooldown, touch ability button, shop exchange/try-on/buy/equip, mission claim, persistence across reload).
+
 ## M3 Lobby & cinematic intro — 2026-10-30 (awaiting feedback)
 - Game now opens on a home lobby: night-time bahay-na-bato stage (adobe arches, capiz windows, lanterns, banderitas) with the selected hero on a sun-medallion platform. Drag to spin the hero; idle wave emote. Camera framing adapts to portrait/landscape.
 - Lobby UI (every button works): profile chip → nickname + stats; coins/Hiyas wallet; settings (sound, reduced effects, two-tap reset); Heroes panel (select, preview, unlock); Top Runs leaderboard (local, best run per nickname, top 10); ‹ › hero arrows; PLAY (or "🔒 Unlock" when the previewed hero is locked).

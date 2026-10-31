@@ -15,7 +15,9 @@ import { INTRO } from '../data/lobby';
 import { IntroSequence, type IntroEvent } from '../gameplay/IntroSequence';
 import type { GuardBrain } from '../enemies/GuardBrain';
 import { Portal } from '../world/Portal';
-import type { HeroId } from '../data/heroes';
+import { ABILITIES } from '../data/abilities';
+import { HEROES, type HeroId } from '../data/heroes';
+import { AbilityViews } from '../world/AbilityViews';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
 import { GuardView, sightRingMaterial } from '../enemies/GuardView';
 import { SurvivalRun, type RunEvent } from '../gameplay/SurvivalRun';
@@ -41,6 +43,7 @@ export class MuseumScene implements GameScene {
   private room: Room | undefined;
   private blinkT = 0;
   private readonly portal: Portal;
+  private readonly abilityViews: AbilityViews;
   private intro: IntroSequence | null = null;
   private introGuard: GuardBrain | null = null;
   /** Accessibility: no camera shake, fewer particles. */
@@ -97,6 +100,7 @@ export class MuseumScene implements GameScene {
       this.guardViews.push(new GuardView(scene, this.fx, sh, ringMat));
     }
     this.portal = new Portal(scene, this.fx.sparkTex);
+    this.abilityViews = new AbilityViews(scene, this.fx.sparkTex);
     this.resetRun();
   }
 
@@ -106,7 +110,8 @@ export class MuseumScene implements GameScene {
     this.introGuard = null;
     this.portal.hide();
     this.player.respawn(SPAWN_POINT);
-    this.run.reset(SPAWN_POINT);
+    this.run.reset(SPAWN_POINT, HEROES[this.player.heroId].abilityKind);
+    this.abilityViews.hide();
     this.cam.zoom = 1;
     this.cam.lookY = 0.6;
     this.cam.snapTo(SPAWN_POINT);
@@ -115,14 +120,20 @@ export class MuseumScene implements GameScene {
     this.room = undefined;
   }
 
-  setHero(id: HeroId): void {
-    this.player.setHero(id);
+  setHero(id: HeroId, skin?: string): void {
+    this.player.setHero(id, skin);
+  }
+
+  /** Ability button / Space. Returns whether it fired (false while on cooldown). */
+  useAbility(): boolean {
+    return this.run.useAbility(this.player.position, this.player.motor.facing);
   }
 
   /** New run that starts with the cinematic: hover under the portal, wait for the drop. */
   startIntro(): void {
     this.resetRun();
     this.fx.reduced = this.reducedEffects;
+    this.abilityViews.reduced = this.reducedEffects;
     this.intro = new IntroSequence();
     this.introGuard = this.run.placeIntroGuard(SPAWN_POINT, INTRO.guardDistance);
     this.portal.open(SPAWN_POINT, INTRO.floatHeight + 1.0, this.reducedEffects);
@@ -187,8 +198,12 @@ export class MuseumScene implements GameScene {
   }
 
   update(dt: number): void {
+    this.player.motor.speedMultiplier = this.run.speedMultiplier;
     this.player.update(this.input.move, dt);
     for (const e of this.run.update(dt, this.player.position)) this.react(e);
+    const ab = this.run.ability;
+    const trail = this.player.motor.dashing ? 'dash' : ab.kind === 'sprint' && ab.active ? 'sprint' : null;
+    this.abilityViews.update(dt, this.player.position, this.run.shielded, trail);
 
     // Blink while invulnerable (but not during the opening grace — that would read as damage).
     const h = this.run.health;
@@ -232,6 +247,18 @@ export class MuseumScene implements GameScene {
         this.fx.burst('hit', e.pos, 1.1, 26);
         if (!this.reducedEffects) this.cam.shake(FEEDBACK.hitShake, FEEDBACK.hitShakeSeconds);
         break;
+      case 'ability':
+        if (e.kind === 'dash') this.player.motor.dash(e.dir, ABILITIES.dash.speed, ABILITIES.dash.duration);
+        if (e.kind === 'shockwave') {
+          this.abilityViews.shockwave(e.pos);
+          if (!this.reducedEffects) this.cam.shake(0.25, 0.25);
+        }
+        if (e.kind === 'dash' || e.kind === 'shockwave') this.fx.dustRing(e.pos, e.kind === 'dash' ? 14 : 30);
+        break;
+      case 'blocked':
+        this.abilityViews.pop();
+        this.fx.burst('rare', e.pos, 1.1, 20);
+        break;
       case 'alert':
       case 'guardJoined':
         this.guardViews[e.guard]?.flashAlert();
@@ -254,6 +281,7 @@ export class MuseumScene implements GameScene {
   dispose(): void {
     this.player.dispose();
     this.portal.dispose();
+    this.abilityViews.dispose();
     for (const v of this.guardViews) v.dispose();
     this.fx.dispose();
     this.museum.dispose();

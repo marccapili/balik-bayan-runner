@@ -1,21 +1,26 @@
-import type { SaveManager, UnlockResult } from '../core/SaveManager';
+import type { SaveManager, ShopResult, UnlockResult } from '../core/SaveManager';
+import { ABILITIES } from '../data/abilities';
 import { HERO_ORDER, HEROES, type HeroId } from '../data/heroes';
 import { LEADERBOARD } from '../data/lobby';
-import { formatTime } from './Hud';
+import { EXCHANGE, SKIN_BY_ID, skinsFor } from '../data/skins';
+import { describe, isDone } from '../gameplay/Missions';
+import { formatTime } from '../utils/format';
 
 export interface LobbyCallbacks {
   /** Start a run with the currently selected (owned) hero. */
   onPlay(): void;
-  /** Show this hero on the stage (owned or not). */
-  onPreview(id: HeroId): void;
+  /** Show this hero on the stage (owned or not), optionally in a specific skin (shop try-on). */
+  onPreview(id: HeroId, skin?: string): void;
   onUnlock(id: HeroId): UnlockResult;
+  /** Any wallet change (skin bought, exchange, mission claimed) — plays the right sound. */
+  onPurchase(kind: 'skin' | 'exchange' | 'claim'): void;
   onToggleMute(): void;
   onToggleReduced(): void;
   onReset(): void;
   onClick(): void;
 }
 
-type Panel = 'heroes' | 'leaderboard' | 'settings' | 'profile';
+type Panel = 'heroes' | 'leaderboard' | 'settings' | 'profile' | 'shop' | 'missions';
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   const el = root.querySelector<T>(sel);
@@ -28,7 +33,7 @@ const fmt = (n: number): string => n.toLocaleString('en-US');
 
 /**
  * Home lobby overlay (HTML on top of the 3D stage). Only features that already work are shown;
- * shop, missions, archive, events and achievements join in their milestones.
+ * archive, events and achievements join in their milestones.
  */
 export class Lobby {
   private readonly root: HTMLElement;
@@ -60,9 +65,11 @@ export class Lobby {
       </header>
       <nav class="lb-side lb-left">
         <button class="side-btn" data-act="heroes"><span>🦸</span>Heroes</button>
+        <button class="side-btn" data-act="shop"><span>🛍️</span>Shop</button>
       </nav>
       <nav class="lb-side lb-right">
         <button class="side-btn" data-act="leaderboard"><span>🏆</span>Top Runs</button>
+        <button class="side-btn" data-act="missions"><span>🎯</span>Missions<b class="badge" hidden></b></button>
       </nav>
       <button class="hero-arrow prev" data-act="prev" aria-label="Previous hero">‹</button>
       <button class="hero-arrow next" data-act="next" aria-label="Next hero">›</button>
@@ -70,7 +77,7 @@ export class Lobby {
         <div class="hero-card">
           <div class="hc-head"><b class="hc-name"></b><span class="hc-class"></span></div>
           <div class="hc-title"></div>
-          <div class="hc-ability"><b class="hc-ab-name"></b> <span class="hc-ab-text"></span> <em>ability arrives next update</em></div>
+          <div class="hc-ability"><span class="hc-ab-icon"></span> <b class="hc-ab-name"></b> <span class="hc-ab-text"></span></div>
         </div>
         <button class="play-btn" data-act="play"><span class="pb-label">PLAY</span><small class="pb-sub">Tara, takbo!</small></button>
       </footer>
@@ -140,7 +147,48 @@ export class Lobby {
       case 'unlock':
         this.tryUnlock(el.dataset.hero as HeroId);
         break;
+      case 'try': {
+        const s = SKIN_BY_ID[el.dataset.skin ?? ''];
+        if (s) {
+          this.preview = s.hero;
+          if (this.save.data.ownedHeroes.includes(s.hero)) this.save.selectHero(s.hero);
+          this.cb.onPreview(s.hero, s.id);
+          this.refresh();
+        }
+        break;
+      }
+      case 'buy':
+        this.buySkin(el.dataset.skin ?? '');
+        break;
+      case 'equip': {
+        const s = SKIN_BY_ID[el.dataset.skin ?? ''];
+        if (s && this.save.equipSkin(s.id)) {
+          this.preview = s.hero;
+          this.save.selectHero(s.hero);
+          this.cb.onPreview(s.hero, s.id);
+          this.refresh();
+        }
+        break;
+      }
+      case 'exchange':
+        if (this.save.exchange()) {
+          this.cb.onPurchase('exchange');
+          this.toast(`+${EXCHANGE.hiyas} Hiyas 💎 Nice trade!`);
+        }
+        this.refresh();
+        break;
+      case 'claim': {
+        const r = this.save.claimMission(Number(el.dataset.seq));
+        if (r) {
+          this.cb.onPurchase('claim');
+          this.toast(`Reward: ${[r.coins ? `+${fmt(r.coins)} coins` : '', r.hiyas ? `+${r.hiyas} Hiyas 💎` : ''].filter(Boolean).join(' · ')} 🎉`);
+        }
+        this.refresh();
+        break;
+      }
       case 'heroes':
+      case 'shop':
+      case 'missions':
       case 'leaderboard':
       case 'settings':
       case 'profile':
@@ -178,6 +226,25 @@ export class Lobby {
     this.preview = id;
     if (this.save.data.ownedHeroes.includes(id)) this.save.selectHero(id);
     this.cb.onPreview(id);
+    this.refresh();
+  }
+
+  private buySkin(id: string): void {
+    const s = SKIN_BY_ID[id];
+    if (!s) return;
+    const r: ShopResult = this.save.buySkin(id);
+    if (r === 'ok') {
+      this.save.equipSkin(id);
+      this.save.selectHero(s.hero);
+      this.preview = s.hero;
+      this.cb.onPurchase('skin');
+      this.cb.onPreview(s.hero, s.id);
+      this.toast(`${s.name} unlocked + equipped! Fresh fit 🔥`);
+    } else if (r === 'insufficient') {
+      this.toast(`Kulang pa ng ${s.cost - this.save.data.diamonds} Hiyas 💎. Missions muna!`);
+    } else if (r === 'locked') {
+      this.toast(`I-unlock muna si ${HEROES[s.hero].name}.`);
+    }
     this.refresh();
   }
 
@@ -220,6 +287,7 @@ export class Lobby {
     $(r, '.hc-name').textContent = h.name;
     $(r, '.hc-class').textContent = h.heroClass;
     $(r, '.hc-title').textContent = h.title;
+    $(r, '.hc-ab-icon').textContent = ABILITIES[h.abilityKind].icon;
     $(r, '.hc-ab-name').textContent = `${h.ability}:`;
     $(r, '.hc-ab-text').textContent = h.abilityBlurb;
     $(r, '.hero-card').dataset.hero = h.id;
@@ -230,6 +298,10 @@ export class Lobby {
     play.toggleAttribute('disabled', !owned && !affordable);
     $(play, '.pb-label').textContent = owned ? 'PLAY' : `🔒 ${fmt(h.unlockCost)}`;
     $(play, '.pb-sub').textContent = owned ? 'Tara, takbo!' : affordable ? 'Tap para i-unlock' : `Kulang pa ng ${fmt(h.unlockCost - d.coins)} coins`;
+    const claim = this.save.claimableMissions;
+    const badge = $(r, '.badge');
+    badge.hidden = claim === 0;
+    badge.textContent = String(claim);
     this.renderPanel();
   }
 
@@ -270,6 +342,50 @@ export class Lobby {
               <button class="link" data-act="pick" data-hero="${id}">Preview</button></div>`;
           }).join('')}</div>`;
         break;
+      case 'shop': {
+        const canEx = d.coins >= EXCHANGE.coins;
+        const tiles = HERO_ORDER.map((hid) => {
+          const heroOwned = d.ownedHeroes.includes(hid);
+          return skinsFor(hid)
+            .map((s) => {
+              const own = d.ownedSkins.includes(s.id);
+              const eq = d.equippedSkins[hid] === s.id;
+              const btn = eq
+                ? '<button class="btn primary" disabled>Suot na ✓</button>'
+                : own
+                  ? `<button class="btn" data-act="equip" data-skin="${s.id}" ${heroOwned ? '' : 'disabled'}>Equip</button>`
+                  : !heroOwned
+                    ? '<button class="btn" disabled>🔒 Hero muna</button>'
+                    : `<button class="btn primary" data-act="buy" data-skin="${s.id}" ${d.diamonds < s.cost ? 'disabled' : ''}>Buy · ${s.cost} 💎</button>`;
+              return `<div class="hero-tile skin-tile ${eq ? 'is-sel' : ''} ${heroOwned ? '' : 'is-locked'}">
+                <span class="swatch" style="--a:${s.swatch[0]};--b:${s.swatch[1]}"></span>
+                <b>${esc(s.name)}</b><small>${esc(HEROES[hid].name)}</small>${btn}
+                <button class="link" data-act="try" data-skin="${s.id}">Try on</button></div>`;
+            })
+            .join('');
+        }).join('');
+        body.innerHTML = `<h2>Shop 🛍️</h2><p>Skins = outfit colourways lang (walang stat boost). Hiyas 💎 galing sa missions o exchange.</p>
+          <div class="exchange"><span><b>${fmt(EXCHANGE.coins)}</b> coins → <b>${EXCHANGE.hiyas}</b> Hiyas 💎</span>
+            <button class="btn primary" data-act="exchange" ${canEx ? '' : 'disabled'}>Exchange</button></div>
+          <div class="hero-grid">${tiles}</div>`;
+        break;
+      }
+      case 'missions': {
+        const rows = d.missions
+          .map((m) => {
+            const done = isDone(m);
+            const pct = Math.round((m.progress / m.target) * 100);
+            const reward = [m.coins ? `+${fmt(m.coins)} 🪙` : '', m.hiyas ? `+${m.hiyas} 💎` : ''].filter(Boolean).join(' ');
+            const shown = m.kind === 'surviveRun' ? `${formatTime(m.progress)} / ${formatTime(m.target)}` : `${fmt(m.progress)} / ${fmt(m.target)}`;
+            return `<div class="mission ${done ? 'done' : ''}">
+              <div class="m-text"><b>${esc(describe(m))}</b><small>${shown} · Reward: ${reward}</small>
+                <div class="m-bar"><i style="width:${pct}%"></i></div></div>
+              ${done ? `<button class="btn primary" data-act="claim" data-seq="${m.seq}">Claim</button>` : `<span class="m-pct">${pct}%</span>`}</div>`;
+          })
+          .join('');
+        body.innerHTML = `<h2>Missions 🎯</h2><p>Tapusin para sa coins at Hiyas. May bago agad pag na-claim mo.</p>${rows}`;
+        break;
+      }
       case 'leaderboard': {
         const rows = d.leaderboard
           .map(

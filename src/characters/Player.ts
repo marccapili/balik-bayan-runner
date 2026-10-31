@@ -59,10 +59,10 @@ export class Player {
   }
 
   /** Swap the visual model (motor state is kept). */
-  setHero(id: HeroId): void {
-    if (id === this.rig.id) return;
+  setHero(id: HeroId, skin?: string): void {
+    if (id === this.rig.id && (!skin || skin === this.rig.skin)) return;
     disposeHero(this.rig);
-    this.rig = buildHero(this.scene, id);
+    this.rig = buildHero(this.scene, id, skin);
     this.animator = new HeroAnimator(this.rig);
     this.syncVisual();
   }

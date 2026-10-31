@@ -74,5 +74,5 @@ export function buildGuard(scene: Scene): HeroRig {
   capBadge.rotation.x = Math.PI / 2 - 0.1;
   capBadge.position.set(0, 0.13, 0.47);
 
-  return { id: 'guard', meshes: k.meshes, ...p };
+  return { id: 'guard', skin: 'guard', meshes: k.meshes, ...p };
 }

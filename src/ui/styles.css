@@ -1262,3 +1262,225 @@ body[data-mode='lobby'] #touch-zone {
     animation: none;
   }
 }
+
+/* ── Ability button (M4) ── */
+.ability-btn {
+  --cd: 1;
+  position: absolute;
+  right: calc(18px + var(--safe-right));
+  bottom: calc(22px + var(--safe-bottom));
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 246, 223, 0.35);
+  background:
+    conic-gradient(rgba(15, 20, 48, 0) calc(var(--cd) * 360deg), rgba(8, 10, 26, 0.72) 0),
+    radial-gradient(circle at 50% 35%, #ffe08a, #e0a43a 70%, #a8741f);
+  color: #2a1a05;
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease, box-shadow 0.2s;
+  z-index: 3;
+}
+.ability-btn:active {
+  transform: scale(0.92);
+}
+.ability-btn.ready {
+  border-color: var(--cream);
+  box-shadow: 0 0 0 4px rgba(242, 193, 78, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35);
+  animation: ab-ready 1.6s ease-in-out infinite;
+}
+.ability-btn.active {
+  border-color: #7fd8ff;
+  box-shadow: 0 0 22px 6px rgba(127, 216, 255, 0.55);
+}
+.ability-btn:not(.ready) .ab-icon,
+.ability-btn:not(.ready) .ab-name {
+  opacity: 0.55;
+}
+.ability-btn[data-left]:not([data-left=''])::after {
+  content: attr(data-left);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--cream);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+.ability-btn.denied {
+  animation: ab-denied 0.3s;
+}
+.ab-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+.ab-name {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
+  max-width: 76px;
+  text-align: center;
+}
+.ab-key {
+  position: absolute;
+  bottom: -20px;
+  font-size: 11px;
+  color: var(--cream);
+  background: rgba(15, 20, 48, 0.75);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+body.touch .ab-key {
+  display: none;
+}
+@keyframes ab-ready {
+  50% { box-shadow: 0 0 0 9px rgba(242, 193, 78, 0.12), 0 6px 18px rgba(0, 0, 0, 0.35); }
+}
+@keyframes ab-denied {
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+.hud[data-mode='intro'] .ability-btn {
+  visibility: hidden;
+}
+@media (max-height: 420px) {
+  .ability-btn {
+    width: 74px;
+    height: 74px;
+  }
+  .ab-icon {
+    font-size: 24px;
+  }
+}
+.r-missions {
+  list-style: none;
+  margin: 6px 0 10px;
+  padding: 0;
+  font-size: 13px;
+  color: #b8f5c8;
+}
+.r-missions small {
+  color: var(--cream);
+  opacity: 0.7;
+}
+
+/* ── Shop + missions (M4) ── */
+.lb-side .side-btn {
+  position: relative;
+}
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--red);
+  color: #fff;
+  font: 800 13px/22px var(--font-display);
+  box-shadow: 0 0 0 2px var(--midnight);
+}
+.badge[hidden] {
+  display: none;
+}
+.swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--a) 55%, var(--b) 55%);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+.skin-tile.is-locked .swatch {
+  filter: grayscale(0.7) brightness(0.7);
+}
+.exchange {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: rgba(159, 226, 255, 0.1);
+  border: 1px solid rgba(159, 226, 255, 0.3);
+}
+.exchange .btn {
+  width: auto;
+  padding: 8px 14px;
+  margin: 0;
+}
+.mission {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  text-align: left;
+}
+.mission.done {
+  background: rgba(120, 220, 150, 0.14);
+  border: 1px solid rgba(120, 220, 150, 0.45);
+}
+.m-text {
+  flex: 1;
+  min-width: 0;
+}
+.m-text b {
+  display: block;
+  font-size: 14px;
+}
+.m-text small {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.m-bar {
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.m-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold));
+}
+.mission .btn {
+  width: auto;
+  padding: 8px 14px;
+  margin: 0;
+}
+.m-pct {
+  font: 800 14px var(--font-display);
+  color: var(--gold);
+}
+.hc-ab-icon {
+  font-size: 14px;
+}
+@media (hover: none), (pointer: coarse) {
+  .ab-key {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  /* Keep the hint clear of the ability button on narrow phones. */
+  .hint {
+    left: calc(12px + var(--safe-left));
+    transform: none;
+    max-width: calc(100vw - 130px);
+    white-space: normal;
+    border-radius: 14px;
+    font-size: 12px;
+  }
+}

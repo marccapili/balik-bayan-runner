@@ -7,6 +7,7 @@ import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HeroId } from '../data/heroes';
+import { SKIN_BY_ID } from '../data/skins';
 import { mat, type MatOpts } from '../world/materials';
 import { embroideryTrim, faceMaterial, patternCloth, tattooTorso, type FaceSpec } from './heroTextures';
 
@@ -21,6 +22,7 @@ import { embroideryTrim, faceMaterial, patternCloth, tattooTorso, type FaceSpec 
  */
 export interface HeroRig {
   id: string;
+  skin: string;
   root: TransformNode;
   body: TransformNode;
   hips: TransformNode;
@@ -62,7 +64,20 @@ export class Kit {
   constructor(
     readonly scene: Scene,
     readonly id: string,
+    /** Skin colour swaps (lower-case hex → hex). */
+    private readonly remap: Record<string, string> = {},
   ) {}
+
+  /** Colour after the skin's remap. */
+  c(hex: string): string {
+    return this.remap[hex.toLowerCase()] ?? hex;
+  }
+
+  /** Patterned cloth with skin colours applied (cached per colourway). */
+  cloth(key: string, base: string, accent: string, dark: string, style: 'tapis' | 'bahag' | 'band'): Material {
+    const [b, a, d] = [this.c(base), this.c(accent), this.c(dark)];
+    return patternCloth(this.scene, `${key}_${b}${a}${d}`, b, a, d, style);
+  }
 
   private put(m: Mesh, parent: TransformNode, material: Material): Mesh {
     m.parent = parent;
@@ -73,7 +88,7 @@ export class Kit {
   }
 
   m(hex: string, opts: MatOpts = {}): Material {
-    return mat(this.scene, hex, { rim: RIM, ...opts });
+    return mat(this.scene, this.c(hex), { rim: RIM, ...opts });
   }
 
   node(name: string, parent: TransformNode | null, x = 0, y = 0, z = 0): TransformNode {
@@ -111,8 +126,9 @@ export class Kit {
   }
 }
 
-export function buildHero(scene: Scene, id: HeroId): HeroRig {
-  const k = new Kit(scene, id);
+export function buildHero(scene: Scene, id: HeroId, skin?: string): HeroRig {
+  const def = skin ? SKIN_BY_ID[skin] : undefined;
+  const k = new Kit(scene, id, def && def.hero === id ? def.remap : {});
   const L = LOOKS[id];
   const p = buildSkeleton(k, faceMaterial(scene, id, { skin: L.skin, ...L.face }), L.skin);
 
@@ -130,7 +146,7 @@ export function buildHero(scene: Scene, id: HeroId): HeroRig {
       buildGabriela(k, L, p);
       break;
   }
-  return { id, meshes: k.meshes, ...p };
+  return { id, skin: def && def.hero === id ? def.id : `${id}.classic`, meshes: k.meshes, ...p };
 }
 
 /** Shared chibi skeleton: rig nodes, painted-face head, ears and neck. Costume goes on top. */
@@ -386,7 +402,7 @@ function buildLapu(k: Kit, L: Look, p: Parts): void {
   const shorts = k.cyl(p.hips, '#3b3436', 0.14, 0.58, 0.56, 18);
   shorts.scaling.z = 0.84;
   shorts.position.y = -0.07;
-  const bahag = patternCloth(k.scene, 'bahag', '#b01e24', '#e0b04a', '#2a1410', 'bahag');
+  const bahag = k.cloth('bahag', '#b01e24', '#e0b04a', '#2a1410', 'bahag');
   const front = k.node('bahag', p.hips, 0, -0.03, 0.25);
   const flap = k.box(front, bahag, 0.24, 0.3, 0.025);
   flap.position.y = -0.14;
@@ -514,7 +530,7 @@ function buildGabriela(k: Kit, L: Look, p: Parts): void {
   arms(k, p, BLOUSE, 0.42, L.skin, '#b8402c', true);
 
   // Woven tapis skirt flaring to the ankles + sash with knot and hanging ends
-  const tapis = patternCloth(k.scene, 'tapis', '#9a1f22', '#e0a94a', '#4a0f12', 'tapis');
+  const tapis = k.cloth('tapis', '#9a1f22', '#e0a94a', '#4a0f12', 'tapis');
   const skirtNode = k.node('skirt', p.hips, 0, 0.06, 0);
   const skirt = k.cyl(skirtNode, tapis, 0.42, 0.56, 0.94, 22);
   skirt.position.y = -0.2;
@@ -552,7 +568,7 @@ function buildGabriela(k: Kit, L: Look, p: Parts): void {
     k.lock(back, L.hair, t * 0.32, 0, -Math.abs(t) * 0.02, 1.05 - Math.abs(t) * 0.15, 0.32, 0.1, t * 0.12);
   }
   p.flutter.push(back);
-  const band = patternCloth(k.scene, 'band', '#9e2a26', '#e0b04a', '#4a0f12', 'band');
+  const band = k.cloth('band', '#9e2a26', '#e0b04a', '#4a0f12', 'band');
   headband(k, p, band, k.m('#9e2a26', { glow: 0.28 }), -0.16);
 }
 

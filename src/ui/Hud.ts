@@ -1,4 +1,5 @@
 import { HEALTH } from '../data/gameplay';
+import { formatTime } from '../utils/format';
 
 export interface HudCallbacks {
   onPause(): void;
@@ -7,6 +8,7 @@ export interface HudCallbacks {
   onReplay(): void;
   onLobby(): void;
   onDrop(): void;
+  onAbility(): void;
   onToggleMute(): void;
 }
 
@@ -25,6 +27,8 @@ export interface RunResult {
   bestScore: number;
   newBest: boolean;
   wallet: number;
+  /** Mission descriptions completed by this run. */
+  missions: string[];
 }
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
@@ -33,10 +37,7 @@ const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   return el;
 };
 
-export const formatTime = (s: number): string => {
-  const t = Math.max(0, Math.floor(s));
-  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
-};
+export { formatTime };
 
 /** HTML overlay for the in-run HUD, pause menu and results. Every button here does something. */
 export class Hud {
@@ -53,6 +54,8 @@ export class Hud {
   private readonly mult: HTMLElement;
   private readonly floats: HTMLElement;
   private readonly hurtFlash: HTMLElement;
+  private readonly abilityBtn: HTMLElement;
+  private abilityKey = '';
   private last: RunStats = { hearts: -1, score: -1, coins: -1, time: -1, multiplier: -1 };
   private toastTimer = 0;
   private fpsAcc = 0;
@@ -81,10 +84,13 @@ export class Hud {
         <span class="dp-big">TAP TO DROP</span>
         <span class="dp-small"><span class="hint-desktop">Click / Space / WASD</span><span class="hint-touch">Tap kahit saan</span> para bumaba ⬇</span>
       </button>
+      <button class="ability-btn" data-act="ability" aria-label="Use ability">
+        <span class="ab-icon"></span><span class="ab-name"></span><span class="ab-key">Space</span>
+      </button>
       <div class="room-toast" aria-live="polite"></div>
       <div class="hint">
-        <span class="hint-desktop"><b>WASD</b> / <b>Arrows</b> para tumakbo · kunin ang coins · iwasan ang guard 👮 · <b>Esc</b> pause</span>
-        <span class="hint-touch">Drag sa left side para tumakbo, iwas sa guard 👮</span>
+        <span class="hint-desktop"><b>WASD</b> para tumakbo · <b>Space</b> ability · iwasan ang guard 👮 · <b>Esc</b> pause</span>
+        <span class="hint-touch">Drag sa left para tumakbo · tap ang ability ⚡</span>
       </div>
       <div class="pause-menu overlay" hidden>
         <div class="panel">
@@ -107,6 +113,7 @@ export class Hud {
             <div><dt>Coins</dt><dd class="r-coins">0</dd></div>
             <div><dt>Best</dt><dd class="r-best">0</dd></div>
           </dl>
+          <ul class="r-missions" hidden></ul>
           <p class="wallet">Wallet mo: <b class="r-wallet">0</b> coins</p>
           <button class="btn primary" data-act="replay">Laro ulit! 🔁</button>
           <button class="btn" data-act="lobby">Lobby 🏠</button>
@@ -125,6 +132,7 @@ export class Hud {
     this.mult = $(this.root, '.mult');
     this.floats = $(this.root, '.floats');
     this.hurtFlash = $(this.root, '.hurt-flash');
+    this.abilityBtn = $(this.root, '.ability-btn');
 
     this.root.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
@@ -134,6 +142,7 @@ export class Hud {
       else if (act === 'replay') cb.onReplay();
       else if (act === 'lobby') cb.onLobby();
       else if (act === 'drop') cb.onDrop();
+      else if (act === 'ability') cb.onAbility();
       else if (act === 'mute') cb.onToggleMute();
     });
     if (new URLSearchParams(location.search).has('debug')) this.fps.hidden = false;
@@ -192,6 +201,32 @@ export class Hud {
     this.last = { ...s };
   }
 
+  /** Which ability the button shows (icon + short name). */
+  setAbility(icon: string, name: string): void {
+    $(this.abilityBtn, '.ab-icon').textContent = icon;
+    $(this.abilityBtn, '.ab-name').textContent = name;
+    this.abilityBtn.setAttribute('aria-label', `Use ability: ${name}`);
+  }
+
+  /** Cooldown ring (`frac` 1 = ready) and active glow. DOM only changes when the rounded state does. */
+  setAbilityState(frac: number, active: boolean, secondsLeft: number): void {
+    const key = `${Math.round(frac * 100)}|${active}|${Math.ceil(secondsLeft)}`;
+    if (key === this.abilityKey) return;
+    this.abilityKey = key;
+    const b = this.abilityBtn;
+    b.style.setProperty('--cd', String(frac));
+    b.classList.toggle('ready', frac >= 1);
+    b.classList.toggle('active', active);
+    b.dataset.left = frac >= 1 ? '' : String(Math.ceil(secondsLeft));
+  }
+
+  /** Little shake when the button is pressed on cooldown. */
+  abilityDenied(): void {
+    this.abilityBtn.classList.remove('denied');
+    void this.abilityBtn.offsetWidth;
+    this.abilityBtn.classList.add('denied');
+  }
+
   flashHurt(): void {
     this.hurtFlash.classList.remove('on');
     void this.hurtFlash.offsetWidth;
@@ -217,6 +252,9 @@ export class Hud {
     $(this.results, '.r-best').textContent = r.bestScore.toLocaleString('en-US');
     $(this.results, '.r-wallet').textContent = r.wallet.toLocaleString('en-US');
     $(this.results, '.new-best').hidden = !r.newBest;
+    const ms = $(this.results, '.r-missions');
+    ms.hidden = r.missions.length === 0;
+    ms.innerHTML = r.missions.map((m) => `<li>✅ Mission done: ${m.replace(/[&<>]/g, '')} <small>(claim sa lobby)</small></li>`).join('');
     this.results.hidden = false;
     $(this.results, '[data-act="replay"]').focus();
   }

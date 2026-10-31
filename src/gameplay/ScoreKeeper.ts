@@ -13,6 +13,8 @@ export class ScoreKeeper {
   coinsPicked = 0;
   time = 0;
   combo = 0;
+  /** Highest multiplier reached this run (missions). */
+  bestMultiplier = 1;
   private comboTimer = 0;
   private bonusesPaid = 0;
   onBonus: ((points: number) => void) | null = null;
@@ -43,6 +45,7 @@ export class ScoreKeeper {
     this.runCoins += COIN_VALUES[kind];
     this.coinsPicked++;
     this.combo++;
+    this.bestMultiplier = Math.max(this.bestMultiplier, this.multiplier);
     this.comboTimer = SCORING.comboWindow;
     return pts;
   }
