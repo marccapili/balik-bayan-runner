@@ -95,6 +95,16 @@ export class GuardBrain {
    */
   hunting = false;
 
+  /** Seconds left inside a Time Freeze (the run scales this enemy's dt). */
+  slowLeft = 0;
+
+  /** Smoke Bomb: drop the chase and go check the smoke cloud at `at` (the run hides the hero meanwhile). */
+  loseTrack(at: Vec2): void {
+    this.hunting = false;
+    this.lastSeen = { ...at };
+    if (this.state === 'chase' || this.state === 'alert') this.enter('search');
+  }
+
   /** Spawn entry: straight into pursuit, ignoring distance until it gets close. */
   hunt(player: Vec2): void {
     this.hunting = true;

@@ -3028,3 +3028,115 @@ body.touch .ab-key {
 .ability-btn.locked .ab-name {
   visibility: hidden;
 }
+
+/* ── Gadgets (owner request, after M7) ── */
+.gadget-btn {
+  position: absolute;
+  right: calc(32px + var(--safe-right));
+  bottom: calc(136px + var(--safe-bottom));
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  border: 3px solid var(--cream);
+  background: radial-gradient(circle at 50% 35%, #3a4a8c, #1b2250 75%);
+  pointer-events: auto;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 4px rgba(127, 216, 255, 0.25), 0 6px 16px rgba(0, 0, 0, 0.35);
+  z-index: 3;
+  padding: 0;
+  transition: transform 0.12s ease;
+}
+.gadget-btn:active {
+  transform: scale(0.9);
+}
+.gadget-btn:not(.empty) {
+  animation: gd-ready 1.4s ease-in-out infinite;
+}
+.gadget-btn.empty {
+  border: 2px dashed rgba(255, 246, 223, 0.45);
+  background: rgba(8, 10, 26, 0.55);
+  box-shadow: none;
+}
+.gd-icon {
+  width: 46px;
+  height: 46px;
+  image-rendering: pixelated;
+}
+.gd-empty {
+  font-size: 22px;
+  opacity: 0.45;
+}
+.gadget-btn:not(.empty) .gd-empty {
+  display: none;
+}
+.gd-key {
+  position: absolute;
+  bottom: -18px;
+  font-size: 11px;
+  font-family: var(--font-display);
+  color: var(--cream);
+  background: rgba(15, 20, 48, 0.75);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+body.touch .gd-key {
+  display: none;
+}
+.gadget-btn.denied {
+  animation: ab-denied 0.3s;
+}
+@keyframes gd-ready {
+  50% { box-shadow: 0 0 0 9px rgba(127, 216, 255, 0.12), 0 6px 16px rgba(0, 0, 0, 0.35); }
+}
+.gadget-fx {
+  position: absolute;
+  right: calc(104px + var(--safe-right));
+  bottom: calc(146px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 3;
+}
+.gfx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 20, 48, 0.8);
+  border: 2px solid rgba(255, 246, 223, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px 2px 3px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--cream);
+}
+.gfx-chip img {
+  width: 22px;
+  height: 22px;
+  image-rendering: pixelated;
+}
+.hud[data-mode='intro'] .gadget-btn,
+.hud[data-mode='intro'] .gadget-fx,
+.hud[data-mode='training'] .gadget-btn {
+  visibility: hidden;
+}
+@media (max-height: 420px) {
+  .gadget-btn {
+    right: calc(108px + var(--safe-right));
+    bottom: calc(30px + var(--safe-bottom));
+    width: 56px;
+    height: 56px;
+  }
+  .gd-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .gadget-fx {
+    right: calc(176px + var(--safe-right));
+    bottom: calc(34px + var(--safe-bottom));
+  }
+}

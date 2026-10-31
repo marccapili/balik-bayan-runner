@@ -72,10 +72,18 @@ describe('Difficulty director', () => {
     expect(run.guards.length).toBe(1);
   });
 
-  it('owner balance: folklore only after 10 exhibits, pursuers at least a minute apart', () => {
+  it('owner balance: folklore only after 10 exhibits, guards outnumber dogs', () => {
     for (const s of SPAWN_SCHEDULE) if (s.kind === 'multo' || s.kind === 'tikbalang') expect(s.exhibits ?? 0).toBeGreaterThanOrEqual(10);
-    const times = SPAWN_SCHEDULE.filter((s) => !s.exhibits).map((s) => s.at);
-    times.slice(1).forEach((t, i) => expect(t - times[i]!).toBeGreaterThanOrEqual(60));
+    const timed = SPAWN_SCHEDULE.filter((s) => !s.exhibits);
+    const times = timed.map((s) => s.at);
+    expect([...times].sort((a, b) => a - b)).toEqual(times);
+    times.slice(1).forEach((t, i) => expect(t - times[i]!).toBeGreaterThanOrEqual(30));
+    // Two guards before the first dog; 5–8 guards in total.
+    expect(timed.slice(0, 2).map((s) => s.kind)).toEqual(['guard', 'guard']);
+    const guards = timed.filter((s) => s.kind === 'guard').length;
+    expect(guards).toBeGreaterThanOrEqual(5);
+    expect(guards).toBeLessThanOrEqual(8);
+    expect(guards).toBeGreaterThan(timed.filter((s) => s.kind === 'dog').length);
   });
 });
 

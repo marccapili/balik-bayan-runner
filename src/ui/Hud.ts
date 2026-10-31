@@ -1,3 +1,5 @@
+import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
+import { gadgetIconUrl } from './gadgetArt';
 import type { Exhibit } from '../data/exhibits';
 import { HEALTH } from '../data/gameplay';
 import { esc, exhibitHtml } from './exhibitHtml';
@@ -11,6 +13,7 @@ export interface HudCallbacks {
   onLobby(): void;
   onDrop(): void;
   onAbility(): void;
+  onGadget(): void;
   onToggleMute(): void;
   /** Exhibit prompt tapped (same as E). */
   onInteract(): void;
@@ -83,6 +86,7 @@ export class Hud {
   private exPromptId: string | null = null;
   private progressKey = '';
   private abilityKey = '';
+  private gadgetKey = '';
   private last: RunStats = { hearts: -1, score: -1, coins: -1, time: -1, multiplier: -1 };
   private toastTimer = 0;
   /** A big banner owns the toast until then (ms); small toasts wait their turn. */
@@ -118,6 +122,10 @@ export class Hud {
         <span class="dp-big">TAP TO DROP</span>
         <span class="dp-small"><span class="hint-desktop">Click / Space / WASD</span><span class="hint-touch">Tap kahit saan</span> para bumaba ⬇</span>
       </button>
+      <button class="gadget-btn empty" data-act="gadget" aria-label="Gadget slot (empty)">
+        <img class="gd-icon" alt="" hidden /><span class="gd-empty">🎒</span><span class="gd-key">Q</span>
+      </button>
+      <div class="gadget-fx" aria-live="polite"></div>
       <button class="ability-btn" data-act="ability" aria-label="Use ability">
         <span class="ab-icon"></span><span class="ab-name"></span><span class="ab-key">Space</span>
       </button>
@@ -128,8 +136,8 @@ export class Hud {
       </button>
       <div class="room-toast" aria-live="polite"></div>
       <div class="hint">
-        <span class="hint-desktop"><b>WASD</b> para tumakbo · <b>Space</b> ability · iwasan ang guard 👮 · <b>Esc</b> pause</span>
-        <span class="hint-touch">Drag sa left para tumakbo · tap ang ability ⚡</span>
+        <span class="hint-desktop"><b>WASD</b> para tumakbo · <b>Space</b> ability · <b>Q</b> gadget · iwasan ang guard 👮 · <b>Esc</b> pause</span>
+        <span class="hint-touch">Drag sa left para tumakbo · tap ang ability ⚡ o gadget 🎒</span>
       </div>
       <div class="pause-menu overlay" hidden>
         <div class="panel">
@@ -194,6 +202,7 @@ export class Hud {
       else if (act === 'lobby') cb.onLobby();
       else if (act === 'drop') cb.onDrop();
       else if (act === 'ability') cb.onAbility();
+      else if (act === 'gadget') cb.onGadget();
       else if (act === 'mute') cb.onToggleMute();
       else if (act === 'interact') cb.onInteract();
       else if (act === 'closeExhibit') cb.onCloseExhibit();
@@ -367,6 +376,31 @@ export class Hud {
     const s = Math.ceil(secondsLeft);
     b.dataset.left = frac >= 1 ? '' : s >= 60 ? formatTime(s) : String(s);
     b.classList.toggle('long', frac < 1 && s >= 60);
+  }
+
+  /** Gadget slot (held gadget or empty) + chips for the gadget effects running right now. */
+  setGadget(held: GadgetKind | null, active: { kind: GadgetKind; left: number }[]): void {
+    const key = `${held}|${active.map((a) => `${a.kind}${Math.ceil(a.left)}`).join(',')}`;
+    if (key === this.gadgetKey) return;
+    this.gadgetKey = key;
+    const b = $(this.root, '.gadget-btn');
+    const img = $(b, '.gd-icon') as HTMLImageElement;
+    b.classList.toggle('empty', !held);
+    b.dataset.kind = held ?? '';
+    img.hidden = !held;
+    if (held) img.src = gadgetIconUrl(held);
+    b.setAttribute('aria-label', held ? `Use gadget: ${GADGET_INFO[held].name}` : 'Gadget slot (empty)');
+    $(this.root, '.gadget-fx').innerHTML = active
+      .map((a) => `<span class="gfx-chip" data-kind="${a.kind}"><img src="${gadgetIconUrl(a.kind)}" alt="" />${a.left > 0 ? `${Math.ceil(a.left)}s` : '✓'}</span>`)
+      .join('');
+  }
+
+  /** Shake the gadget slot (pressed while empty). */
+  gadgetDenied(): void {
+    const b = $(this.root, '.gadget-btn');
+    b.classList.remove('denied');
+    void b.offsetWidth;
+    b.classList.add('denied');
   }
 
   /** Little shake when the button is pressed on cooldown. */

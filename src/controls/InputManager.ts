@@ -2,7 +2,7 @@ import { INPUT_CONFIG } from '../data/config';
 import type { Vec2 } from '../utils/math';
 import { joystickVector, keysVector } from './joystickMath';
 
-type Action = 'ability' | 'interact' | 'pause' | 'confirm';
+type Action = 'ability' | 'gadget' | 'interact' | 'pause' | 'confirm';
 
 const KEY_MAP: Record<string, 'up' | 'down' | 'left' | 'right'> = {
   KeyW: 'up',
@@ -17,6 +17,8 @@ const KEY_MAP: Record<string, 'up' | 'down' | 'left' | 'right'> = {
 
 const ACTION_KEYS: Record<string, Action> = {
   Space: 'ability',
+  KeyQ: 'gadget',
+  KeyG: 'gadget',
   KeyE: 'interact',
   Escape: 'pause',
   KeyP: 'pause',

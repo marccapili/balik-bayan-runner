@@ -20,6 +20,7 @@ import { TrainingProps } from '../world/TrainingProps';
 import { ExhibitMarkers } from '../world/ExhibitMarkers';
 import type { Exhibit } from '../data/exhibits';
 import { exhibitInReach, guideTarget, type GuideTarget } from '../history/exhibitMath';
+import { GadgetViews } from '../world/GadgetViews';
 import { GuideViews } from '../world/GuideViews';
 import { TRAINING } from '../data/training';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
@@ -58,6 +59,7 @@ export class MuseumScene implements GameScene {
   private readonly trainingProps: TrainingProps;
   private readonly exhibitMarkers: ExhibitMarkers;
   private readonly guide: GuideViews;
+  private readonly gadgetViews: GadgetViews;
   /** Where the floor arrow points (null in training / endless). */
   guideTo: GuideTarget | null = null;
   /** Hero-level ability perks for a hero (set by the Game; full strength by default). */
@@ -119,6 +121,7 @@ export class MuseumScene implements GameScene {
     this.trainingProps = new TrainingProps(scene);
     this.exhibitMarkers = new ExhibitMarkers(scene);
     this.guide = new GuideViews(scene);
+    this.gadgetViews = new GadgetViews(scene, this.fx.sparkTex);
     this.resetRun();
   }
 
@@ -136,6 +139,7 @@ export class MuseumScene implements GameScene {
     this.guide.hide();
     this.trainingProps.sync(this.run.dummies, 0);
     this.abilityViews.hide();
+    this.gadgetViews.hide();
     this.cam.zoom = 1;
     this.cam.lookY = 0.6;
     this.cam.snapTo(spawn);
@@ -154,11 +158,17 @@ export class MuseumScene implements GameScene {
     return this.run.useAbility(this.player.position, this.player.motor.facing);
   }
 
+  /** Fires the carried gadget (false when the slot is empty). */
+  useGadget(): boolean {
+    return this.run.useGadget(this.player.position);
+  }
+
   /** Training: straight into the Hall of Heroes with practice dummies (no intro, guards or coins). */
   startTraining(): void {
     this.resetRun(true);
     this.fx.reduced = this.reducedEffects;
     this.abilityViews.reduced = this.reducedEffects;
+    this.gadgetViews.reduced = this.reducedEffects;
   }
 
   get training(): boolean {
@@ -170,6 +180,7 @@ export class MuseumScene implements GameScene {
     this.resetRun();
     this.fx.reduced = this.reducedEffects;
     this.abilityViews.reduced = this.reducedEffects;
+    this.gadgetViews.reduced = this.reducedEffects;
     this.intro = new IntroSequence();
     this.introGuard = this.run.placeIntroGuard(SPAWN_POINT, INTRO.guardDistance);
     this.portal.open(SPAWN_POINT, INTRO.floatHeight + 1.0, this.reducedEffects);
@@ -241,6 +252,14 @@ export class MuseumScene implements GameScene {
     const ab = this.run.ability;
     const trail = this.player.motor.dashing ? 'dash' : ab.kind === 'sprint' && ab.active ? 'sprint' : null;
     this.abilityViews.update(dt, this.player.position, this.run.shielded, trail);
+    const run0 = this.run;
+    this.gadgetViews.update(
+      dt,
+      run0.gadgets.items,
+      this.player.position,
+      { bubble: run0.bubble, magnet: run0.magnetLeft > 0, smoke: run0.smokeLeft > 0, smokeAt: run0.smokeAt },
+      run0.guards,
+    );
 
     // Blink while invulnerable (but not during the opening grace — that would read as damage).
     const h = this.run.health;
@@ -355,6 +374,17 @@ export class MuseumScene implements GameScene {
         break;
       case 'idCard':
         this.fx.burst('rare', e.pos, 0.9, 22);
+        break;
+      case 'gadgetPickup':
+        this.fx.burst('rare', e.pos, 0.9, 18);
+        break;
+      case 'gadget':
+        if (e.kind === 'freeze') this.gadgetViews.freezeWave(e.pos);
+        if (e.kind === 'smoke') this.fx.dustRing(e.pos, 30);
+        break;
+      case 'bubblePop':
+        this.gadgetViews.pop();
+        this.fx.burst('hit', e.pos, 1.1, 18);
         break;
       default:
         break;

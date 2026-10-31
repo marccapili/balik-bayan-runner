@@ -3,6 +3,7 @@ import { ABILITIES, type AbilityKind } from '../data/abilities';
 import { PLAYER_CONFIG } from '../data/config';
 import { ENDLESS, SPAWN_SCHEDULE, TIKBALANG, type EnemyKind } from '../data/enemies';
 import { EXHIBITS } from '../data/exhibits';
+import { GADGETS, type GadgetKind } from '../data/gadgets';
 import { GUARD, PICKUPS } from '../data/gameplay';
 import { EXHIBIT_REWARDS } from '../data/progression';
 import { TRAINING } from '../data/training';
@@ -12,6 +13,7 @@ import { MultoBrain } from '../enemies/MultoBrain';
 import type { CollisionWorld } from '../physics/Collision';
 import { clamp, lerp, type Vec2 } from '../utils/math';
 import { Ability } from './Ability';
+import { GadgetField } from './Gadgets';
 import { Health } from './Health';
 import { PickupField, type PickupKind } from './PickupField';
 import { ScoreKeeper } from './ScoreKeeper';
@@ -31,6 +33,9 @@ export type RunEvent =
   | { type: 'idCard'; pos: Vec2 }
   | { type: 'ability'; kind: AbilityKind; pos: Vec2; dir: Vec2; affected: number }
   | { type: 'blocked'; pos: Vec2; guard: number }
+  | { type: 'gadgetPickup'; kind: GadgetKind; pos: Vec2 }
+  | { type: 'gadget'; kind: GadgetKind; pos: Vec2; affected: number }
+  | { type: 'bubblePop'; pos: Vec2; guard: number }
   | { type: 'dead' };
 
 /** Training practice dummy: never moves on its own or hurts the hero; abilities knock it around. */
@@ -84,6 +89,19 @@ export class SurvivalRun {
   score = new ScoreKeeper();
   ability = new Ability('sprint');
   readonly pickups: PickupField;
+  readonly gadgets: GadgetField;
+  /** The one gadget the hero is carrying (fires on the gadget button). */
+  gadget: GadgetKind | null = null;
+  /** Seconds left on the active gadget effects. */
+  smokeLeft = 0;
+  magnetLeft = 0;
+  freezeLeft = 0;
+  /** Protective Bubble up: absorbs the next enemy collision. */
+  bubble = false;
+  /** Where the Smoke Bomb went off: enemies go there instead of chasing the hero. */
+  smokeAt: Vec2 = { x: 0, z: 0 };
+  /** Gadgets used this run (stats). */
+  gadgetsUsed = 0;
   readonly guards: GuardBrain[] = [];
   over = false;
   /** Test/debug switch: no guards, no damage (used by the movement smoke tests). */
@@ -117,6 +135,7 @@ export class SurvivalRun {
     private readonly rng: () => number = Math.random,
   ) {
     this.pickups = new PickupField(spots, rng);
+    this.gadgets = new GadgetField(spots, rng);
   }
 
   /** Clean state for a new run (replay never inherits anything from the last one). */
@@ -132,6 +151,11 @@ export class SurvivalRun {
     this.score.onBonus = (points) => this.events.push({ type: 'bonus', points });
     this.pickups.reset(player);
     if (training) for (const it of this.pickups.items) it.active = false;
+    this.gadgets.reset();
+    this.gadget = null;
+    this.smokeLeft = this.magnetLeft = this.freezeLeft = 0;
+    this.bubble = false;
+    this.gadgetsUsed = 0;
     this.guards.length = 0;
     this.decoys = [];
     this.read.clear();
@@ -257,6 +281,51 @@ export class SurvivalRun {
     return true;
   }
 
+  /** Fires the carried gadget (the Coin Magnet never sits in the slot: it fires on pickup). */
+  useGadget(player: Vec2): boolean {
+    if (this.over || !this.gadget) return false;
+    const kind = this.gadget;
+    this.gadget = null;
+    this.activateGadget(kind, player);
+    return true;
+  }
+
+  /** Debug/test: put a gadget straight into the slot (or fire a magnet). */
+  giveGadget(kind: GadgetKind, player: Vec2): void {
+    if (kind === 'magnet') this.activateGadget(kind, player);
+    else this.gadget = kind;
+  }
+
+  private activateGadget(kind: GadgetKind, player: Vec2): void {
+    let affected = 0;
+    this.gadgetsUsed++;
+    switch (kind) {
+      case 'smoke':
+        this.smokeLeft = GADGETS.smoke.seconds;
+        this.smokeAt = { ...player };
+        for (const g of this.guards) {
+          if (g.state === 'chase' || g.state === 'alert' || g.hunting) affected++;
+          g.loseTrack(player);
+        }
+        break;
+      case 'magnet':
+        this.magnetLeft = GADGETS.magnet.seconds;
+        break;
+      case 'bubble':
+        this.bubble = true;
+        break;
+      case 'freeze':
+        this.freezeLeft = GADGETS.freeze.seconds;
+        for (const g of this.guards) {
+          if (Math.hypot(g.pos.x - player.x, g.pos.z - player.z) > GADGETS.freeze.radius) continue;
+          g.slowLeft = GADGETS.freeze.seconds;
+          affected++;
+        }
+        break;
+    }
+    this.queued.push({ type: 'gadget', kind, pos: { ...player }, affected });
+  }
+
   get hasIdCard(): boolean {
     return !!this.idCard?.taken;
   }
@@ -327,6 +396,19 @@ export class SurvivalRun {
       } else {
         this.events.push({ type: 'pickup', kind: got.kind, pos: got.pos, points: this.score.collect(got.kind) });
       }
+    }
+
+    // Gadgets: the magnet fires on pickup, everything else needs a free slot.
+    for (const got of this.gadgets.update(dt, player, this.gadget === null)) {
+      this.events.push({ type: 'gadgetPickup', kind: got.kind, pos: { ...got.pos } });
+      if (got.kind === 'magnet') this.activateGadget('magnet', player);
+      else this.gadget = got.kind;
+    }
+    this.smokeLeft = Math.max(0, this.smokeLeft - dt);
+    this.freezeLeft = Math.max(0, this.freezeLeft - dt);
+    if (this.magnetLeft > 0) {
+      this.magnetLeft = Math.max(0, this.magnetLeft - dt);
+      this.pickups.attract(player, GADGETS.magnet.radius, GADGETS.magnet.pullSpeed * dt);
     }
 
     const card = this.idCard;
@@ -439,15 +521,22 @@ export class SurvivalRun {
 
 
   private updateGuards(dt: number, player: Vec2): void {
+    // Smoke: everyone hunts the cloud, not the hero. Freeze: slowed enemies run on a slower clock.
+    const target = this.smokeLeft > 0 ? this.smokeAt : player;
     this.guards.forEach((g, i) => {
       g.chaseSpeed = this.chaseSpeed;
-      g.update(dt, player);
+      let gdt = dt;
+      if (g.slowLeft > 0) {
+        g.slowLeft = Math.max(0, g.slowLeft - dt);
+        gdt = dt * GADGETS.freeze.slow;
+      }
+      g.update(gdt, target);
       if (g.justAlerted) this.events.push({ type: 'alert', guard: i });
       if (g instanceof LungerBrain) {
         if (g.justWoundUp) this.events.push({ type: 'windup', guard: i, kind: g.kind });
         if (g.justBonked) this.events.push({ type: 'bonk', pos: { ...g.pos }, guard: i });
       }
-      if (g instanceof TikbalangBrain && g.wantsIllusion) this.castIllusion(g, player);
+      if (g instanceof TikbalangBrain && g.wantsIllusion && this.smokeLeft <= 0) this.castIllusion(g, player);
     });
     for (let i = 0; i < this.guards.length; i++) for (let j = i + 1; j < this.guards.length; j++) this.guards[i]!.separateFrom(this.guards[j]!);
 
@@ -466,6 +555,16 @@ export class SurvivalRun {
         g.pos = this.world.move(g.pos, { x: -dir.x * 1.2, z: -dir.z * 1.2 }, g.radius);
         g.stun(ABILITIES.shield.blockStun);
         this.events.push({ type: 'blocked', pos: { ...player }, guard: this.guards.indexOf(g) });
+        continue;
+      }
+      if (this.bubble && !this.health.invulnerable) {
+        // Protective Bubble: soaks this one collision, then it's gone.
+        const B = GADGETS.bubble;
+        this.bubble = false;
+        this.health.grantInvuln(0.5);
+        g.pos = this.world.move(g.pos, { x: -dir.x * B.knockback, z: -dir.z * B.knockback }, g.radius);
+        g.stun(B.blockStun);
+        this.events.push({ type: 'bubblePop', pos: { ...player }, guard: this.guards.indexOf(g) });
         continue;
       }
       if (!this.health.damage()) continue;

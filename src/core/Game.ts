@@ -1,3 +1,4 @@
+import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Sfx, type SfxName } from '../audio/Sfx';
 import { InputManager } from '../controls/InputManager';
@@ -108,6 +109,7 @@ export class Game {
         this.dropRequested = true;
       },
       onAbility: () => this.input.press('ability'),
+      onGadget: () => this.input.press('gadget'),
       onToggleMute: () => this.toggleMute(),
       onInteract: () => this.input.press('interact'),
       onCloseExhibit: () => this.closeExhibit(),
@@ -293,6 +295,11 @@ export class Game {
         this.hud?.abilityDenied();
         if (this.museum.run.ability.locked) this.hud?.showRoom(`🔒 Skill sa Lv ${HERO_LEVEL.abilityLevel}`, `Mag-level up muna si ${HEROES[this.heroId].name}`);
       }
+      if (this.input.consume('gadget') && !this.museum.useGadget()) {
+        this.sfx.play('denied');
+        this.hud?.gadgetDenied();
+        this.hud?.showRoom('🎒 Wala kang gadget', 'Pulutin ang mga lumulutang na icon sa museum');
+      }
       const mini = this.mini;
       const near = this.museum.nearExhibit;
       if (mini?.active) {
@@ -466,6 +473,12 @@ export class Game {
     const ab = run.ability;
     this.hud.setAbilityState(ab.cooldownFrac, ab.active || run.shielded, ab.cooldownLeft, ab.locked ? HERO_LEVEL.abilityLevel : 0);
     this.hud.setExhibitProgress(run.cleared, run.exhibitTotal, run.endless, run.hasIdCard);
+    const fx: { kind: GadgetKind; left: number }[] = [];
+    if (run.smokeLeft > 0) fx.push({ kind: 'smoke', left: run.smokeLeft });
+    if (run.magnetLeft > 0) fx.push({ kind: 'magnet', left: run.magnetLeft });
+    if (run.freezeLeft > 0) fx.push({ kind: 'freeze', left: run.freezeLeft });
+    if (run.bubble) fx.push({ kind: 'bubble', left: 0 });
+    this.hud.setGadget(run.gadget, fx);
   }
 
   private onRunEvent(e: RunEvent): void {
@@ -491,6 +504,28 @@ export class Game {
           if (!m.run.over) hud?.showRoom('💥 Nahuli ka habang naglalaro!', 'Na-cancel ang mini-game. Balikan mo mamaya');
         }
         break;
+      case 'gadgetPickup': {
+        const info = GADGET_INFO[e.kind];
+        this.sfx.play('unlock');
+        hud?.showRoom(`${info.icon} ${info.name}!`, e.kind === 'magnet' ? info.blurb : `${info.blurb} · pindutin ang 🎒 (Q)`);
+        break;
+      }
+      case 'gadget':
+        this.sfx.play(e.kind === 'smoke' ? 'poof' : e.kind === 'freeze' ? 'shockwave' : e.kind === 'bubble' ? 'shield' : 'rare');
+        if (e.kind === 'smoke' && e.affected > 0) {
+          const p = m.toScreen(e.pos, 2.4);
+          hud?.floatText(p.x, p.y, 'Nawala ka sa paningin nila! 💨', 'bonus');
+        } else if (e.kind === 'freeze' && e.affected > 0) {
+          const p = m.toScreen(e.pos, 2.4);
+          hud?.floatText(p.x, p.y, `${e.affected} kalaban, slow-mo! ⏳`, 'bonus');
+        }
+        break;
+      case 'bubblePop': {
+        this.sfx.play('block');
+        const p = m.toScreen(e.pos, 2.2);
+        hud?.floatText(p.x, p.y, 'Bubble saved you! 🛡️', 'bonus');
+        break;
+      }
       case 'idCard':
         this.sfx.play('claim');
         hud?.showRoom('🪪 Curator ID, nakuha!', 'Pwede mo nang i-swipe sa Card Swipe exhibits');
@@ -627,6 +662,14 @@ export class Game {
       this.lobby?.refresh();
     },
     winMiniGame: () => this.mini?.forceWin(),
+    giveGadget: (kind) => {
+      const m = this.museum;
+      if (m) m.run.giveGadget(kind, m.player.position);
+    },
+    spawnGadget: (kind, x, z) => {
+      const m = this.museum;
+      if (m) m.run.gadgets.spawn(m.player.position, kind, x === undefined || z === undefined ? undefined : { x, z });
+    },
     giveIdCard: () => {
       const c = this.museum?.run.idCard;
       if (c) {
@@ -688,6 +731,13 @@ export class Game {
       guide: this.museum?.guideTo ?? null,
       chaseSpeed: run?.chaseSpeed,
       abilityLocked: run?.ability.locked ?? false,
+      gadget: run?.gadget ?? null,
+      gadgetItems: run?.gadgets.items.map((g) => ({ kind: g.kind, x: g.pos.x, z: g.pos.z })) ?? [],
+      smokeLeft: run?.smokeLeft ?? 0,
+      magnetLeft: run?.magnetLeft ?? 0,
+      freezeLeft: run?.freezeLeft ?? 0,
+      bubble: run?.bubble ?? false,
+      slowed: run?.guards.filter((g) => g.slowLeft > 0).length ?? 0,
       lastRecord: this.lastRecord,
       decoys: run?.decoys.map((d) => ({ x: d.pos.x, z: d.pos.z, ttl: d.ttl })),
       ability: run && { kind: run.ability.kind, ready: run.ability.ready, active: run.ability.active, uses: run.ability.uses, cooldownLeft: run.ability.cooldownLeft },
@@ -731,6 +781,10 @@ export interface DebugHooks {
   finishMissions(): void;
   /** Solves the open mini-game. */
   winMiniGame(): void;
+  /** Puts a gadget in the hero's slot (a magnet fires at once). */
+  giveGadget(kind: GadgetKind): void;
+  /** Drops a gadget pickup on the floor (at x, z if given). */
+  spawnGadget(kind?: GadgetKind, x?: number, z?: number): void;
   /** Moves the Curator ID card under the hero (picked up next frame). */
   giveIdCard(): void;
   /** Marks exhibits cleared (paid as normal) until `n` are done. */

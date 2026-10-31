@@ -1,5 +1,15 @@
 # Development changelog
 
+## Gadgets + guard-heavy spawns — 2026-10-31 (owner request)
+- Four collectible gadgets float around the museum (first after 15 s, then every 18–28 s, max 2 on the floor, vanish after 40 s). Original pixel-art icons drawn in code (`ui/gadgetArt.ts`).
+  - 🧲 Coin Magnet: fires on pickup, pulls coins within 7 m for 8 s.
+  - 💨 Smoke Bomb: every enemy loses you and goes to check the smoke for 5 s.
+  - 🛡️ Protective Bubble: absorbs the next enemy collision (shoves + stuns that enemy).
+  - ⏳ Time Freeze: enemies within 11 m move at 30% speed for 5 s (hourglass over their heads).
+- One gadget slot: a second gadget stays on the floor until you use yours. Use it with Q (or G) on desktop, the 🎒 button on phones; it works during mini-games too. No gadgets in training.
+- Spawns: guards come more often than dogs. Guard 0:00 and 0:30, dog 1:00, guard 1:30, guard 2:05, dog 2:45, guard 3:25, guard 4:10, dog 5:00, guard 5:50 (7 guards + 3 dogs, all slower than the hero). Multo on the 10th exhibit, tikbalang on the 12th, unchanged.
+- Tests: 148 unit (11 new gadget tests), browser checks for pickup, one slot, Q/button, magnet, smoke, bubble, freeze.
+
 ## M7 follow-up: difficulty balance — 2026-10-31 (owner feedback)
 - Before 10 exhibits only guards and dogs chase you: guard at 0:00, dog 1:00, guard 2:00, dog 3:20, guard 4:40 (max 5, all slower than the hero's 6.2 m/s top speed). The multo joins on the 10th exhibit, the tikbalang on the 12th, Endless after the 15th.
 - Guard chase speed ramps 4.5 → 5.3 over 6 minutes (was 4). Schedule entries can now be gated by exhibits cleared (`SPAWN_SCHEDULE[].exhibits`).

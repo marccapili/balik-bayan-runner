@@ -732,7 +732,9 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const end = await until((s) => s.endless, 4000);
   check('clearing all 15 starts Endless Mode', end.endless && end.cleared === 15);
   await wait(300);
-  check('Endless banner + HUD badge', /ENDLESS/.test(await page.textContent('.exp-chip')) && /MUSEUM CLEARED/.test(await page.textContent('.room-toast')));
+  const chipT = await page.textContent('.exp-chip');
+  const toastT = await page.textContent('.room-toast');
+  check('Endless banner + HUD badge', /ENDLESS/.test(chipT) && /MUSEUM CLEARED/.test(toastT), `${chipT} · ${toastT}`);
   await page.screenshot({ path: `${OUT}/m7-endless.png` });
   const later = await until((s) => s.endlessTime > 3, 60000);
   check('Endless ramps the chase speed', later.chaseSpeed > pre.chaseSpeed, `${pre.chaseSpeed} → ${later.chaseSpeed}`);
@@ -756,6 +758,78 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const r = await snap(page);
   check('archive survives a reload', r.save.discovered.length === 2 && r.save.discovered.includes('tikbalang'));
   check('no console errors (history)', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
+// ── Gadgets: pickup, one slot, Q to use, magnet auto, bubble absorbs a hit ──
+{
+  const { ctx, page, errors } = await bootPage(browser, { viewport: { width: 1280, height: 720 } }, '?play');
+  const until = async (pred, maxMs = 8000) => {
+    const t0 = Date.now();
+    let s = await snap(page);
+    while (!pred(s) && Date.now() - t0 < maxMs) {
+      await wait(80);
+      s = await snap(page);
+    }
+    return s;
+  };
+  await until((s) => s.guards.length >= 1);
+  check('gadget slot starts empty', (await snap(page)).gadget === null && (await page.getAttribute('.gadget-btn', 'class')).includes('empty'));
+  await page.keyboard.press('q');
+  await wait(300);
+  check('Q with an empty slot does nothing', (await snap(page)).smokeLeft === 0);
+  // Bubble absorbs a hit.
+  await page.evaluate(() => {
+    window.__bbr.debug.setInvulnerable(0);
+    window.__bbr.debug.giveGadget('bubble');
+  });
+  await page.click('.gadget-btn');
+  const bub = await until((s) => s.bubble);
+  check('the gadget button fires the Protective Bubble', bub.bubble);
+  await page.screenshot({ path: `${OUT}/gadget-bubble.png` });
+  await page.evaluate(([x, z]) => window.__bbr.debug.spawnEnemy('guard', x + 2, z), [bub.x, bub.z]);
+  const popped = await until((s) => !s.bubble, 15000);
+  check('bubble absorbs one collision (no heart lost)', !popped.bubble && popped.hearts === bub.hearts, `hearts ${bub.hearts}→${popped.hearts}`);
+  await page.evaluate(() => window.__bbr.debug.setInvulnerable(1e6));
+  const p0 = await snap(page);
+  await page.evaluate(([x, z]) => window.__bbr.debug.spawnGadget('smoke', x + 1.5, z), [p0.x, p0.z]);
+  await wait(300);
+  await page.screenshot({ path: `${OUT}/gadget-pickup.png` });
+  await page.evaluate(([x, z]) => window.__bbr.debug.teleport(x + 1.5, z), [p0.x, p0.z]);
+  const got = await until((s) => s.gadget === 'smoke');
+  check('walking over a gadget puts it in the slot', got.gadget === 'smoke' && !(await page.getAttribute('.gadget-btn', 'class')).includes('empty'));
+  await page.evaluate(([x, z]) => window.__bbr.debug.spawnGadget('freeze', x, z), [got.x, got.z]);
+  await wait(600);
+  const full = await snap(page);
+  check('only one gadget at a time (second stays on the floor)', full.gadget === 'smoke' && full.gadgetItems.some((g) => g.kind === 'freeze'));
+  await page.evaluate(([x, z]) => window.__bbr.debug.spawnGadget('magnet', x, z), [got.x, got.z]);
+  const mag = await until((s) => s.magnetLeft > 0);
+  check('Coin Magnet fires on pickup without using the slot', mag.magnetLeft > 0 && mag.gadget === 'smoke');
+  await page.screenshot({ path: `${OUT}/gadget-magnet.png` });
+  await page.keyboard.press('q');
+  const sm = await until((s) => s.smokeLeft > 0);
+  check('Q uses the Smoke Bomb', sm.smokeLeft > 0 && sm.gadget !== 'smoke');
+  const refill = await until((s) => s.gadget === 'freeze', 4000);
+  check('the freed slot picks up the gadget left on the floor', refill.gadget === 'freeze');
+  await page.evaluate(() => window.__bbr.debug.teleport(0, 4));
+  await page.keyboard.press('q');
+  const used = await until((s) => s.gadget === null && s.freezeLeft > 0, 4000);
+  check('slot is empty after using a gadget', used.gadget === null);
+  await wait(400);
+  await page.screenshot({ path: `${OUT}/gadget-smoke.png` });
+  await page.evaluate(() => {
+    window.__bbr.debug.setInvulnerable(1e6);
+    window.__bbr.debug.giveGadget('freeze');
+  });
+  const pf = await snap(page);
+  await page.evaluate(([x, z]) => window.__bbr.debug.spawnEnemy('guard', x + 4, z), [pf.x, pf.z]);
+  await wait(300);
+  await page.keyboard.press('q');
+  const fr = await until((s) => s.freezeLeft > 0);
+  check('Time Freeze slows enemies nearby', fr.freezeLeft > 0 && fr.slowed > 0, `slowed=${fr.slowed}`);
+  await wait(300);
+  await page.screenshot({ path: `${OUT}/gadget-freeze.png` });
+  check('no console errors (gadgets)', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }
 

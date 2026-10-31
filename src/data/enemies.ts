@@ -80,16 +80,22 @@ export interface SpawnEntry {
 }
 
 /**
- * Owner balance (2026-10-31): before 10 exhibits only guards and dogs, slow enough to outrun
- * (hero 6.2 m/s vs guard chase 4.5→5.3, dog ×0.92). A new pursuer every 60–80 s, max 5.
- * The multo joins on the 10th exhibit, the tikbalang on the 12th; Endless takes over after 15.
+ * Owner balance (2026-10-31): before 10 exhibits only guards and dogs, all slower than the hero
+ * (6.2 m/s vs guard chase 4.5→5.3, dog ×0.92). Guards come more often than dogs (two guards
+ * before the first dog) and build up to 7 guards + 3 dogs. The multo joins on the 10th exhibit,
+ * the tikbalang on the 12th; Endless takes over after 15.
  */
 export const SPAWN_SCHEDULE: readonly SpawnEntry[] = [
   { at: 0, kind: 'guard' },
+  { at: 30, kind: 'guard' },
   { at: 60, kind: 'dog' },
-  { at: 120, kind: 'guard' },
-  { at: 200, kind: 'dog' },
-  { at: 280, kind: 'guard' },
+  { at: 90, kind: 'guard' },
+  { at: 125, kind: 'guard' },
+  { at: 165, kind: 'dog' },
+  { at: 205, kind: 'guard' },
+  { at: 250, kind: 'guard' },
+  { at: 300, kind: 'dog' },
+  { at: 350, kind: 'guard' },
   { at: 0, kind: 'multo', exhibits: 10 },
   { at: 0, kind: 'tikbalang', exhibits: 12 },
 ];

@@ -102,6 +102,19 @@ export class PickupField {
     return got;
   }
 
+  /** Coin Magnet: active coins within `radius` slide `step` metres toward the hero (hearts stay put). */
+  attract(player: Vec2, radius: number, step: number): void {
+    for (const it of this.items) {
+      if (!it.active || it.kind === 'heart') continue;
+      const dx = player.x - it.pos.x;
+      const dz = player.z - it.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > radius || d < 1e-4) continue;
+      const k = Math.min(1, step / d);
+      it.pos = { x: it.pos.x + dx * k, z: it.pos.z + dz * k };
+    }
+  }
+
   private respawnDelay(): number {
     const [a, b] = this.cfg.respawnDelay;
     return a + this.rng() * (b - a);
