@@ -68,18 +68,30 @@ export const TIKBALANG = {
 } as const;
 
 /**
- * Difficulty director: who joins the run and when (seconds of run time).
- * The intro guard counts as the first entry. New arrivals hunt the hero from any distance.
+ * Difficulty director entry: who joins the run and when. The intro guard counts as the first
+ * entry. New arrivals hunt the hero from any distance.
  */
-export const SPAWN_SCHEDULE: readonly { at: number; kind: EnemyKind }[] = [
+export interface SpawnEntry {
+  /** Run seconds before this enemy may join. */
+  at: number;
+  kind: EnemyKind;
+  /** Exhibits that must be cleared first (owner: folklore only after 10). Default 0. */
+  exhibits?: number;
+}
+
+/**
+ * Owner balance (2026-10-31): before 10 exhibits only guards and dogs, slow enough to outrun
+ * (hero 6.2 m/s vs guard chase 4.5→5.3, dog ×0.92). A new pursuer every 60–80 s, max 5.
+ * The multo joins on the 10th exhibit, the tikbalang on the 12th; Endless takes over after 15.
+ */
+export const SPAWN_SCHEDULE: readonly SpawnEntry[] = [
   { at: 0, kind: 'guard' },
-  { at: 35, kind: 'dog' },
-  { at: 70, kind: 'guard' },
-  { at: 100, kind: 'multo' },
-  { at: 135, kind: 'dog' },
-  { at: 170, kind: 'tikbalang' },
-  { at: 220, kind: 'guard' },
-  { at: 270, kind: 'multo' },
+  { at: 60, kind: 'dog' },
+  { at: 120, kind: 'guard' },
+  { at: 200, kind: 'dog' },
+  { at: 280, kind: 'guard' },
+  { at: 0, kind: 'multo', exhibits: 10 },
+  { at: 0, kind: 'tikbalang', exhibits: 12 },
 ];
 
 /** Toast + sound when something new joins (Gen Z Taglish). */

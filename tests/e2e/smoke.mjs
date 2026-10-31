@@ -721,6 +721,12 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await until((s) => s.state === 'playing', 4000);
   await page.evaluate(() => window.__bbr.debug.setPeaceful(false));
   // Clear the rest → Endless.
+  await page.evaluate(() => window.__bbr.debug.clearExhibits(9));
+  await wait(600);
+  check('no folklore enemies before 10 exhibits', !(await snap(page)).guards.some((g) => g.kind === 'multo' || g.kind === 'tikbalang'));
+  await page.evaluate(() => window.__bbr.debug.clearExhibits(10));
+  const ten = await until((s) => s.guards.some((g) => g.kind === 'multo'), 6000);
+  check('the multo joins on the 10th exhibit', ten.guards.some((g) => g.kind === 'multo'), `${ten.cleared} cleared, ${ten.guards.map((g) => g.kind).join(',')} · ${await page.textContent('.room-toast')}`);
   const pre = await snap(page);
   await page.evaluate(() => window.__bbr.debug.clearExhibits(15));
   const end = await until((s) => s.endless, 4000);

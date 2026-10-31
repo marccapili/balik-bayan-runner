@@ -1,5 +1,10 @@
 # Development changelog
 
+## M7 follow-up: difficulty balance — 2026-10-31 (owner feedback)
+- Before 10 exhibits only guards and dogs chase you: guard at 0:00, dog 1:00, guard 2:00, dog 3:20, guard 4:40 (max 5, all slower than the hero's 6.2 m/s top speed). The multo joins on the 10th exhibit, the tikbalang on the 12th, Endless after the 15th.
+- Guard chase speed ramps 4.5 → 5.3 over 6 minutes (was 4). Schedule entries can now be gated by exhibits cleared (`SPAWN_SCHEDULE[].exhibits`).
+- Tests: 137 unit, 148 browser checks.
+
 ## M7 Exhibit Mode, mini-games, Shop & levels — 2026-10-31 (awaiting feedback)
 - One run = Exhibit Mode then Endless. 15 exhibits (new: Spoliarium, Ifugao Rice Terraces, EDSA People Power, each sourced with a "for verification" note). Each is locked behind one of 8 original museum mini-games: Wire the Display, Curator Card Swipe, Vault Code, Balangay Navigator, Restore the Artifact, Dust the Find, Timeline Sort, Baybayin Match. Clearing pays +250 score and +20 coins; diamonds at the 5th (+20), 10th (+20) and 15th (+30) exhibit.
 - Enemies keep moving while you play a mini-game; a red "May papalapit!" warning shows when one is within 6 m, and getting hit cancels the game.

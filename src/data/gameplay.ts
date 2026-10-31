@@ -48,7 +48,7 @@ export const GUARD = {
   chaseSpeedStart: 4.5,
   chaseSpeedMax: 5.3,
   /** Seconds of run time to go from start to max chase speed (speed is capped, never unbounded). */
-  speedRampSeconds: 240,
+  speedRampSeconds: 360,
   acceleration: 22,
   /** Re-acquire radius: a patrolling/searching guard spots the hero inside this (needs line of sight). */
   sightRange: 5,

@@ -1,3 +1,4 @@
+import { EXHIBITS } from '../../src/data/exhibits';
 import { describe, expect, it } from 'vitest';
 import { NavGrid } from '../../src/ai/NavGrid';
 import { ABILITIES } from '../../src/data/abilities';
@@ -29,21 +30,35 @@ const quietRun = (hero: Vec2): SurvivalRun => {
 };
 
 describe('Difficulty director', () => {
-  it('brings enemies in exactly in SPAWN_SCHEDULE order and time', () => {
+  it('brings in timed entries on schedule; folklore waits for cleared exhibits', () => {
     const hero = { x: 0, z: 0 };
     const run = new SurvivalRun(nav, sight, world, spots, seeded(3));
     run.reset(hero, 'sprint');
     run.health.grantInvuln(1e9);
     const joined: { kind: string; at: number }[] = [];
-    const end = SPAWN_SCHEDULE[SPAWN_SCHEDULE.length - 1]!.at + 2;
-    while (run.score.time < end) {
-      for (const e of run.update(DT, hero)) if (e.type === 'guardJoined') joined.push({ kind: e.kind, at: run.score.time });
-    }
-    expect(joined.map((j) => j.kind)).toEqual(SPAWN_SCHEDULE.map((s) => s.kind));
-    joined.forEach((j, i) => expect(j.at).toBeGreaterThanOrEqual(SPAWN_SCHEDULE[i]!.at));
-    expect(run.guards.map((g) => g.kind)).toEqual(SPAWN_SCHEDULE.map((s) => s.kind));
-    // Nothing extra after the schedule runs out.
-    for (let i = 0; i < 300; i++) run.update(DT, hero);
+    const step = (until: number) => {
+      while (run.score.time < until) for (const e of run.update(DT, hero)) if (e.type === 'guardJoined') joined.push({ kind: e.kind, at: run.score.time });
+    };
+    const timed = SPAWN_SCHEDULE.filter((s) => !s.exhibits);
+    step(Math.max(...timed.map((s) => s.at)) + 60);
+    // Before 10 exhibits: only guards and dogs, each no earlier than its time.
+    expect(joined.map((j) => j.kind)).toEqual(timed.map((s) => s.kind));
+    expect(joined.every((j) => j.kind === 'guard' || j.kind === 'dog')).toBe(true);
+    joined.forEach((j, i) => expect(j.at).toBeGreaterThanOrEqual(timed[i]!.at));
+    const ids = EXHIBITS.map((e) => e.id);
+    for (let i = 0; i < 9; i++) run.discover(ids[i]!);
+    step(run.score.time + 5);
+    expect(run.guards.some((g) => g.kind === 'multo')).toBe(false);
+    run.discover(ids[9]!);
+    step(run.score.time + 0.5);
+    expect(run.guards.filter((g) => g.kind === 'multo').length).toBe(1);
+    expect(run.guards.some((g) => g.kind === 'tikbalang')).toBe(false);
+    run.discover(ids[10]!);
+    run.discover(ids[11]!);
+    step(run.score.time + 0.5);
+    expect(run.guards.filter((g) => g.kind === 'tikbalang').length).toBe(1);
+    // Nothing extra before Endless.
+    step(run.score.time + 120);
     expect(run.guards.length).toBe(SPAWN_SCHEDULE.length);
   });
 
@@ -57,10 +72,10 @@ describe('Difficulty director', () => {
     expect(run.guards.length).toBe(1);
   });
 
-  it('the schedule ramps: folklore creatures only arrive after the first minute', () => {
-    for (const s of SPAWN_SCHEDULE) if (s.kind === 'multo' || s.kind === 'tikbalang') expect(s.at).toBeGreaterThanOrEqual(60);
-    const times = SPAWN_SCHEDULE.map((s) => s.at);
-    expect([...times].sort((a, b) => a - b)).toEqual(times);
+  it('owner balance: folklore only after 10 exhibits, pursuers at least a minute apart', () => {
+    for (const s of SPAWN_SCHEDULE) if (s.kind === 'multo' || s.kind === 'tikbalang') expect(s.exhibits ?? 0).toBeGreaterThanOrEqual(10);
+    const times = SPAWN_SCHEDULE.filter((s) => !s.exhibits).map((s) => s.at);
+    times.slice(1).forEach((t, i) => expect(t - times[i]!).toBeGreaterThanOrEqual(60));
   });
 });
 

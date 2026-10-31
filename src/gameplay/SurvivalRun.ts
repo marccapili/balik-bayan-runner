@@ -103,8 +103,8 @@ export class SurvivalRun {
   /** Mini-games won this run (daily tasks). */
   gamesWon = 0;
   readonly exhibitTotal = EXHIBITS.length;
-  /** How many SPAWN_SCHEDULE entries have joined (the intro guard is entry 0). */
-  private spawned = 0;
+  /** Which SPAWN_SCHEDULE entries have joined (the intro guard is entry 0). */
+  private joined: boolean[] = [];
   private events: RunEvent[] = [];
   /** Events raised between updates (ability use); handed out once by the next `update`. */
   private queued: RunEvent[] = [];
@@ -140,7 +140,7 @@ export class SurvivalRun {
     this.endlessSpawned = 0;
     this.gamesWon = 0;
     this.idCard = training ? null : { pos: this.idCardSpot(player), taken: false };
-    this.spawned = 0;
+    this.joined = [];
     this.over = false;
     this.events = [];
     this.queued = [];
@@ -165,7 +165,7 @@ export class SurvivalRun {
     const g = this.makeEnemy(SPAWN_SCHEDULE[0]?.kind ?? 'guard', { ...at }, 0);
     g.yaw = Math.atan2(at.x - player.x, at.z - player.z); // facing away from the hero
     this.guards.push(g);
-    this.spawned = 1;
+    this.joined = [true];
     return g;
   }
 
@@ -373,10 +373,12 @@ export class SurvivalRun {
 
   /** Difficulty director: brings in each SPAWN_SCHEDULE entry once its time comes. */
   private spawnDue(player: Vec2): void {
-    while (this.spawned < SPAWN_SCHEDULE.length && this.score.time >= SPAWN_SCHEDULE[this.spawned]!.at) {
-      this.spawnEnemy(SPAWN_SCHEDULE[this.spawned]!.kind, player);
-      this.spawned++;
-    }
+    // Entries are checked independently: a time gate never holds back an exhibit-gated one.
+    SPAWN_SCHEDULE.forEach((s, i) => {
+      if (this.joined[i] || this.score.time < s.at || this.read.size < (s.exhibits ?? 0)) return;
+      this.joined[i] = true;
+      this.spawnEnemy(s.kind, player);
+    });
     // Endless: a new arrival every few seconds until the museum is packed.
     while (this.endless && this.guards.length < ENDLESS.maxEnemies && this.endlessTime >= (this.endlessSpawned + 1) * ENDLESS.spawnEvery) {
       this.spawnEnemy(ENDLESS.kinds[this.endlessSpawned % ENDLESS.kinds.length]!, player);
