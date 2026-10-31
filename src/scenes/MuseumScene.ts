@@ -21,6 +21,8 @@ import { ExhibitMarkers } from '../world/ExhibitMarkers';
 import type { Exhibit } from '../data/exhibits';
 import { exhibitInReach, guideTarget, type GuideTarget } from '../history/exhibitMath';
 import { GadgetViews } from '../world/GadgetViews';
+import { GlowLayer } from '@babylonjs/core/Layers/glowLayer';
+import '@babylonjs/core/Layers/effectLayerSceneComponent';
 import { GuideViews } from '../world/GuideViews';
 import { TRAINING } from '../data/training';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
@@ -60,6 +62,7 @@ export class MuseumScene implements GameScene {
   private readonly exhibitMarkers: ExhibitMarkers;
   private readonly guide: GuideViews;
   private readonly gadgetViews: GadgetViews;
+  private glow: GlowLayer | null = null;
   /** Where the floor arrow points (null in training / endless). */
   guideTo: GuideTarget | null = null;
   /** Hero-level ability perks for a hero (set by the Game; full strength by default). */
@@ -154,6 +157,24 @@ export class MuseumScene implements GameScene {
   }
 
   /** Ability button / Space. Returns whether it fired (false while on cooldown). */
+  /**
+   * High quality: a soft, controlled glow on coins, exhibit gems and gadgets only
+   * (never the whole scene). Low quality: no glow layer at all.
+   */
+  setGlow(on: boolean): void {
+    if (!on) {
+      this.glow?.dispose();
+      this.glow = null;
+      this.gadgetViews.onMesh = null;
+      return;
+    }
+    if (this.glow) return;
+    const g = (this.glow = new GlowLayer('softGlow', this.scene, { mainTextureRatio: 0.35, blurKernelSize: 16 }));
+    g.intensity = 0.3;
+    for (const m of [...this.pickupViews.glowMeshes, ...this.exhibitMarkers.glowMeshes]) g.addIncludedOnlyMesh(m);
+    this.gadgetViews.onMesh = (m) => g.addIncludedOnlyMesh(m);
+  }
+
   useAbility(): boolean {
     return this.run.useAbility(this.player.position, this.player.motor.facing);
   }

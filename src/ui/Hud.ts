@@ -14,6 +14,7 @@ export interface HudCallbacks {
   onDrop(): void;
   onAbility(): void;
   onGadget(): void;
+  onTipOk(): void;
   onToggleMute(): void;
   /** Exhibit prompt tapped (same as E). */
   onInteract(): void;
@@ -135,6 +136,7 @@ export class Hud {
         <small class="ep-title"></small></span>
       </button>
       <div class="room-toast" aria-live="polite"></div>
+      <div class="tip-card" role="status" hidden><span class="tip-icon"></span><span class="tip-text"><b class="tip-title"></b><span class="tip-body"></span></span><button class="tip-ok" data-act="tipOk">Gets! ✓</button></div>
       <div class="hint">
         <span class="hint-desktop"><b>WASD</b> para tumakbo · <b>Space</b> ability · <b>Q</b> gadget · iwasan ang guard 👮 · <b>Esc</b> pause</span>
         <span class="hint-touch">Drag sa left para tumakbo · tap ang ability ⚡ o gadget 🎒</span>
@@ -203,11 +205,34 @@ export class Hud {
       else if (act === 'drop') cb.onDrop();
       else if (act === 'ability') cb.onAbility();
       else if (act === 'gadget') cb.onGadget();
+      else if (act === 'tipOk') cb.onTipOk();
       else if (act === 'mute') cb.onToggleMute();
       else if (act === 'interact') cb.onInteract();
       else if (act === 'closeExhibit') cb.onCloseExhibit();
     });
     if (new URLSearchParams(location.search).has('debug')) this.fps.hidden = false;
+  }
+
+  private tipKey = '';
+
+  /** First-run coach card (null hides it). */
+  showTip(tip: { id: string; icon: string; title: string; body: string } | null): void {
+    const key = tip?.id ?? '';
+    if (key === this.tipKey) return;
+    this.tipKey = key;
+    const card = $(this.root, '.tip-card');
+    card.hidden = !tip;
+    if (!tip) return;
+    $(card, '.tip-icon').textContent = tip.icon;
+    $(card, '.tip-title').textContent = tip.title;
+    $(card, '.tip-body').textContent = tip.body;
+    card.classList.remove('pop');
+    void card.offsetWidth;
+    card.classList.add('pop');
+  }
+
+  setFpsVisible(on: boolean): void {
+    this.fps.hidden = !on && !new URLSearchParams(location.search).has('debug');
   }
 
   toggleFps(): void {
@@ -428,8 +453,28 @@ export class Hud {
     while (this.floats.childElementCount > 14) this.floats.firstElementChild?.remove();
   }
 
+  /** Score reveal: quick ease-out count-up (instant with reduced effects). */
+  private countUp(el: HTMLElement, to: number): void {
+    el.dataset.value = String(to);
+    const fmtN = (n: number): string => n.toLocaleString('en-US');
+    if (document.body.classList.contains('reduced-fx') || to <= 0) {
+      el.textContent = fmtN(to);
+      return;
+    }
+    const t0 = performance.now();
+    const dur = 900;
+    const tick = (): void => {
+      if (el.dataset.value !== String(to)) return; // a newer result took over
+      const k = Math.min(1, (performance.now() - t0) / dur);
+      el.textContent = fmtN(Math.round(to * (1 - (1 - k) ** 3)));
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    el.textContent = '0';
+    requestAnimationFrame(tick);
+  }
+
   showResults(r: RunResult): void {
-    $(this.results, '.r-score').textContent = r.score.toLocaleString('en-US');
+    this.countUp($(this.results, '.r-score'), r.score);
     $(this.results, '.r-time').textContent = formatTime(r.time);
     $(this.results, '.r-coins').textContent = String(r.coins);
     $(this.results, '.r-best').textContent = r.bestScore.toLocaleString('en-US');

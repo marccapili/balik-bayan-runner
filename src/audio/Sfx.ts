@@ -13,10 +13,23 @@ export class Sfx {
   constructor() {
     const unlock = (): void => {
       this.ensure();
-      void this.ctx?.resume();
+      void this.ctx?.resume().then(() => this.onUnlock?.());
     };
     window.addEventListener('pointerdown', unlock, { passive: true });
     window.addEventListener('keydown', unlock);
+  }
+
+  /** Called once audio can play (after the first tap/key). */
+  onUnlock: (() => void) | null = null;
+
+  /** The shared AudioContext (null until the first gesture). */
+  get context(): AudioContext | null {
+    return this.ctx;
+  }
+
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.master) this.master.gain.value = this._muted ? 0 : this.volume;
   }
 
   get muted(): boolean {

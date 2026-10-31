@@ -94,6 +94,11 @@ export class PickupViews {
     return heart;
   }
 
+  /** Coin/heart source meshes (their instances glow with them). */
+  get glowMeshes(): Mesh[] {
+    return Object.values(this.sources);
+  }
+
   /** Mirror the current pickup list onto instances and animate spin/bob. */
   sync(items: readonly Pickup[], dt: number): void {
     this.t += dt;

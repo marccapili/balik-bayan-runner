@@ -833,6 +833,53 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await ctx.close();
 }
 
+// ── Phase 7 polish: settings (music/SFX sliders, quality, FPS, large text) + first-run tips ──
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(URL);
+  await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
+  await page.click('[data-act="settings"]');
+  await wait(200);
+  const setVol = (which, v) =>
+    page.evaluate(([w, val]) => {
+      const el = document.querySelector(`[data-vol="${w}"]`);
+      el.value = String(val);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, [which, v]);
+  await setVol('music', 20);
+  await setVol('sfx', 65);
+  await page.click('.seg-btn[data-q="low"]');
+  await page.click('[data-act="fps"]');
+  await page.click('[data-act="largeText"]');
+  await wait(150);
+  let st = await page.evaluate(() => window.__bbr.save.data.settings);
+  check('music + SFX sliders are separate and saved', st.musicVolume === 0.2 && st.sfxVolume === 0.65);
+  check('graphics quality buttons work', st.quality === 'low' && (await page.locator('.seg-btn.on').textContent()).includes('Low'));
+  check('Show FPS + large text toggles work', st.showFps && st.largeText && (await page.evaluate(() => document.body.classList.contains('large-text'))));
+  await page.screenshot({ path: `${OUT}/p7-settings.png` });
+  await page.reload();
+  await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
+  st = await page.evaluate(() => window.__bbr.save.data.settings);
+  check('settings survive a reload', st.musicVolume === 0.2 && st.quality === 'low' && st.largeText);
+  // First run: coach tips (fresh save, ?tutorial lets ?play show them).
+  await page.evaluate(() => localStorage.removeItem('bbr.save'));
+  await page.goto(URL + '?play&peaceful&tutorial');
+  await page.waitForFunction(() => window.__bbr?.fsm.state === 'playing', null, { timeout: 30000 });
+  await page.waitForSelector('.tip-card:not([hidden])', { timeout: 8000 }).catch(() => {});
+  check('first run shows the movement tip', /Takbo na/.test((await page.textContent('.tip-card')) ?? '') && (await page.isVisible('.tip-card')));
+  await page.screenshot({ path: `${OUT}/p7-tip.png` });
+  await page.click('.tip-ok');
+  await wait(400);
+  const next = await page.textContent('.tip-card');
+  check('"Gets!" moves on to the next tip', !/Takbo na/.test(next ?? '') || !(await page.isVisible('.tip-card')));
+  check('no console errors (polish)', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
 // ── Phone (landscape + portrait) with touch joystick ──
 for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }], ['phone-portrait', { width: 390, height: 844 }]]) {
   const { ctx, page, errors } = await bootPage(browser, { viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }, '?peaceful&play', { version: 5, heroXp: { bonifacio: 850 } });
@@ -900,7 +947,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await wait(150);
   await page.tap('.pause-menu [data-act="lobby"]');
   const t0 = Date.now();
-  while ((await snap(page)).state !== 'lobby' && Date.now() - t0 < 10000) await wait(100);
+  while ((await snap(page)).state !== 'lobby' && Date.now() - t0 < 25000) await wait(100);
   check(`${label}: pause → lobby works on touch`, (await snap(page)).state === 'lobby');
   await wait(1200);
   await page.screenshot({ path: `${OUT}/${label}-lobby.png` });

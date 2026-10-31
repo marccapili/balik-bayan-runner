@@ -53,6 +53,8 @@ export class GadgetViews {
   private popT = -1;
   private freezeT = -1;
   reduced = false;
+  /** Lets the scene add newly built pickup icons to the glow layer. */
+  onMesh: ((m: Mesh) => void) | null = null;
 
   constructor(
     private readonly scene: Scene,
@@ -130,6 +132,7 @@ export class GadgetViews {
     disc.rotation.x = Math.PI / 2;
     disc.material = this.discMats[kind];
     disc.isPickable = false;
+    this.onMesh?.(icon);
     return { icon, disc, kind };
   }
 

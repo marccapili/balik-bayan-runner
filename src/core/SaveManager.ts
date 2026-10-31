@@ -33,11 +33,40 @@ export interface LeaderboardEntry {
   date: string;
 }
 
+export type Quality = 'auto' | 'low' | 'high';
+
 export interface Settings {
   muted: boolean;
   /** Fewer particles, no camera shake (accessibility + weak devices). */
   reducedEffects: boolean;
+  /** 0..1 sliders (Music and SFX are separate). */
+  musicVolume: number;
+  sfxVolume: number;
+  /** Graphics: low = 1× resolution + no glow; high = sharp + glow; auto picks by device. */
+  quality: Quality;
+  /** FPS counter on the HUD (to measure on a real phone). */
+  showFps: boolean;
+  /** Bigger UI text. */
+  largeText: boolean;
+  /** First-run tips already shown. */
+  tutorialDone: boolean;
 }
+
+const prefersReducedMotion = (): boolean =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+export const defaultSettings = (): Settings => ({
+  muted: false,
+  reducedEffects: prefersReducedMotion(),
+  musicVolume: 0.5,
+  sfxVolume: 0.8,
+  quality: 'auto',
+  showFps: false,
+  largeText: false,
+  tutorialDone: false,
+});
+
+const vol = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : d);
 
 export interface SaveData {
   version: 5;
@@ -112,7 +141,7 @@ export function defaultSave(now = new Date()): SaveData {
     ownedHeroes: HERO_ORDER.filter((h) => HEROES[h].unlockCost === 0),
     selectedHero: STARTER_HERO,
     leaderboard: [],
-    settings: { muted: false, reducedEffects: false },
+    settings: defaultSettings(),
     ownedSkins: SKINS.filter((s) => s.cost === 0).map((s) => s.id),
     equippedSkins: classicSkins(),
     missions: freshMissions(),
@@ -220,7 +249,17 @@ export function migrate(raw: unknown, now = new Date()): SaveData {
     selectedHero,
     leaderboard,
     // v1 kept `muted` at the top level.
-    settings: { muted: s.muted === true || r.muted === true, reducedEffects: s.reducedEffects === true },
+    settings: {
+      muted: s.muted === true || r.muted === true,
+      reducedEffects: typeof s.reducedEffects === 'boolean' ? s.reducedEffects : defaultSettings().reducedEffects,
+      musicVolume: vol(s.musicVolume, 0.5),
+      sfxVolume: vol(s.sfxVolume, 0.8),
+      quality: s.quality === 'low' || s.quality === 'high' ? s.quality : 'auto',
+      showFps: s.showFps === true,
+      largeText: s.largeText === true,
+      // Players with an existing save already know the basics.
+      tutorialDone: s.tutorialDone === true || num(r.runs) > 0,
+    },
     ownedSkins,
     equippedSkins,
     missions,

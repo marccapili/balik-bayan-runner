@@ -1,5 +1,14 @@
 # Development changelog
 
+## Phase 7 polish (part 1) — 2026-10-31 (awaiting feedback)
+- Music: two original procedural loops (`audio/Music.ts`, data `data/audio.ts`), inspired by kulintang gong music on a pentatonic scale (not transcriptions). Calm lobby loop; museum chase loop whose bass/shaker/lead layers fade in as more enemies join, a bit faster in Endless. Music ducks while paused, reading or playing a mini-game, and stops on game over. Scheduled on the audio clock, so it doesn't depend on frame rate.
+- Settings: separate Music and SFX volume sliders, master mute, Graphics quality (Auto / Low / High), Show FPS, Reduced effects, Large text, and "show tutorial tips again". Saved in the existing v5 save (old saves get defaults; volumes are clamped).
+- Graphics quality: Low renders at 1× pixel ratio with no glow (for weak phones); High renders up to 2× with a soft, limited glow on coins, exhibit gems and gadgets only. Auto picks High on desktops and phones with many CPU cores. No FPS numbers are claimed: turn on Show FPS and check on a real phone.
+- Accessibility: a new save follows the device's "reduce motion" setting for Reduced effects; Large text makes HUD, lobby, mini-game and history text bigger.
+- First-run tips: one short coach card at a time (move, exhibits, ability, gadget when you first hold one), each until you do it or it times out, with a "Gets!" button. Shown once; returning players skip them.
+- Results: the score counts up (instant with reduced effects).
+- Tests: 152 unit, plus browser checks for the settings and tips.
+
 ## Gadgets + guard-heavy spawns — 2026-10-31 (owner request)
 - Four collectible gadgets float around the museum (first after 15 s, then every 18–28 s, max 2 on the floor, vanish after 40 s). Original pixel-art icons drawn in code (`ui/gadgetArt.ts`).
   - 🧲 Coin Magnet: fires on pickup, pulls coins within 7 m for 8 s.

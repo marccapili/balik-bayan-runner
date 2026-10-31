@@ -1,4 +1,8 @@
 import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
+import { MUSIC } from '../data/audio';
+import { TIPS, TIP_LOCKED_SUFFIX } from '../data/tutorial';
+import { Tutorial } from '../gameplay/Tutorial';
+import { Music } from '../audio/Music';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Sfx, type SfxName } from '../audio/Sfx';
 import { InputManager } from '../controls/InputManager';
@@ -42,6 +46,12 @@ export class Game {
   private transition: Transition | null = null;
   readonly save = new SaveManager();
   readonly sfx = new Sfx();
+  readonly music = new Music(() => this.sfx.context);
+  /** First-run coach tips (null when done / not this run). */
+  private tutorial: Tutorial | null = null;
+  private tut = { moved: 0, opened: false, usedGadget: false, last: { x: 0, z: 0 } };
+  /** ?play (tests/dev) skips the tips unless ?tutorial is set. */
+  private readonly noTutorial = new URLSearchParams(location.search).has('play') && !new URLSearchParams(location.search).has('tutorial');
   /** Total simulated (unpaused) time across runs — used by tests. */
   simTime = 0;
   /** Ability events handled (tests check each use plays its sound/effect once). */
@@ -64,6 +74,7 @@ export class Game {
     this.applyPixelRatio();
     this.input = new InputManager(document.getElementById('touch-zone')!);
     this.sfx.setMuted(this.save.data.settings.muted);
+    this.sfx.onUnlock = () => this.music.poke();
 
     window.addEventListener('resize', () => {
       this.applyPixelRatio();
@@ -78,7 +89,8 @@ export class Game {
   }
 
   private applyPixelRatio(): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, RENDER_CONFIG.maxPixelRatio);
+    const cap = this.save && !this.highQuality ? RENDER_CONFIG.lowQualityPixelRatio : RENDER_CONFIG.maxPixelRatio;
+    const dpr = Math.min(window.devicePixelRatio || 1, cap);
     this.engine.setHardwareScalingLevel(1 / dpr);
   }
 
@@ -110,6 +122,7 @@ export class Game {
       },
       onAbility: () => this.input.press('ability'),
       onGadget: () => this.input.press('gadget'),
+      onTipOk: () => this.tutorial?.dismiss(),
       onToggleMute: () => this.toggleMute(),
       onInteract: () => this.input.press('interact'),
       onCloseExhibit: () => this.closeExhibit(),
@@ -127,6 +140,17 @@ export class Game {
       onToggleMute: () => this.toggleMute(),
       onToggleReduced: () => {
         this.save.data.settings.reducedEffects = !this.save.data.settings.reducedEffects;
+        this.save.save();
+        this.applySettings();
+      },
+      onSetting: (key, value) => {
+        const st = this.save.data.settings;
+        if (key === 'musicVolume' && typeof value === 'number') st.musicVolume = value;
+        else if (key === 'sfxVolume' && typeof value === 'number') st.sfxVolume = value;
+        else if (key === 'quality' && (value === 'auto' || value === 'low' || value === 'high')) st.quality = value;
+        else if (key === 'showFps') st.showFps = value === true;
+        else if (key === 'largeText') st.largeText = value === true;
+        else if (key === 'tutorial') st.tutorialDone = false;
         this.save.save();
         this.applySettings();
       },
@@ -162,8 +186,25 @@ export class Game {
     if (q.has('play')) this.quickStart();
   }
 
+  /** Auto quality: High on desktops / strong phones, Low on small-core devices. */
+  private get highQuality(): boolean {
+    const q = this.save.data.settings.quality;
+    if (q !== 'auto') return q === 'high';
+    const cores = navigator.hardwareConcurrency ?? 8;
+    const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    return cores > 4 && !(touch && cores <= 6);
+  }
+
   private applySettings(): void {
     const s = this.save.data.settings;
+    this.sfx.setVolume(s.sfxVolume);
+    this.music.setVolume(s.musicVolume);
+    this.music.setMuted(s.muted);
+    this.applyPixelRatio();
+    this.engine.resize();
+    this.museum?.setGlow(this.highQuality && !s.reducedEffects);
+    this.hud?.setFpsVisible(s.showFps);
+    document.body.classList.toggle('large-text', s.largeText);
     this.sfx.setMuted(s.muted);
     this.hud?.setMuted(s.muted);
     if (this.museum) this.museum.reducedEffects = s.reducedEffects;
@@ -238,7 +279,48 @@ export class Game {
     this.hud?.setPaused(false);
     this.hud?.setMode('intro');
     this.museum.startIntro();
+    this.startTutorial();
     this.pushStats();
+  }
+
+  private startTutorial(): void {
+    const m = this.museum;
+    this.tutorial = !m || this.noTutorial || this.trainingHero || this.save.data.settings.tutorialDone ? null : new Tutorial();
+    const p = m?.player.position ?? { x: 0, z: 0 };
+    this.tut = { moved: 0, opened: false, usedGadget: false, last: { x: p.x, z: p.z } };
+    this.hud?.showTip(null);
+  }
+
+  private finishTutorial(): void {
+    if (!this.tutorial) return;
+    this.tutorial = null;
+    this.hud?.showTip(null);
+    this.save.data.settings.tutorialDone = true;
+    this.save.save();
+  }
+
+  private updateTutorial(dt: number): void {
+    const t = this.tutorial;
+    const m = this.museum;
+    if (!t || !m) return;
+    const p = m.player.position;
+    this.tut.moved += Math.hypot(p.x - this.tut.last.x, p.z - this.tut.last.z);
+    this.tut.last = { x: p.x, z: p.z };
+    const run = m.run;
+    const id = t.update(dt, {
+      moved: this.tut.moved,
+      openedExhibit: this.tut.opened,
+      usedAbility: run.ability.uses > 0,
+      holdingGadget: run.gadget !== null,
+      usedGadget: this.tut.usedGadget,
+    });
+    if (t.done) return this.finishTutorial();
+    if (!id) return this.hud?.showTip(null);
+    const tip = TIPS[id];
+    const touch = document.body.classList.contains('touch');
+    let body = touch ? tip.touch : tip.desktop;
+    if (id === 'ability' && run.ability.locked) body += TIP_LOCKED_SUFFIX;
+    this.hud?.showTip({ id, icon: tip.icon, title: tip.title, body });
   }
 
   /** Skip lobby + cinematic (used by automated movement tests via ?play). */
@@ -249,6 +331,7 @@ export class Game {
     this.hud?.setMode('play');
     if (this.fsm.state === 'lobby') this.fsm.transition('intro');
     this.fsm.transition('playing');
+    this.startTutorial();
     this.pushStats();
   }
 
@@ -295,7 +378,9 @@ export class Game {
         this.hud?.abilityDenied();
         if (this.museum.run.ability.locked) this.hud?.showRoom(`🔒 Skill sa Lv ${HERO_LEVEL.abilityLevel}`, `Mag-level up muna si ${HEROES[this.heroId].name}`);
       }
-      if (this.input.consume('gadget') && !this.museum.useGadget()) {
+      const gadgetPressed = this.input.consume('gadget');
+      if (gadgetPressed && this.museum.useGadget()) this.tut.usedGadget = true;
+      else if (gadgetPressed) {
         this.sfx.play('denied');
         this.hud?.gadgetDenied();
         this.hud?.showRoom('🎒 Wala kang gadget', 'Pulutin ang mga lumulutang na icon sa museum');
@@ -327,9 +412,23 @@ export class Game {
       this.defeatLeft -= dt;
       if (this.defeatLeft <= 0) this.showResults();
     }
+    if (state === 'playing') this.updateTutorial(dt);
+    else if (state !== 'paused' && state !== 'reading') this.hud?.showTip(null);
+    this.updateMusic(state);
     this.hud?.tickFps(dt);
     if (state === 'lobby' || state === 'boot') this.lobbyScene?.scene.render();
     else this.museum?.scene.render();
+  }
+
+  /** Picks the loop + intensity for the current state (cheap; Music only acts on changes). */
+  private updateMusic(state: string): void {
+    const run = this.museum?.run;
+    if (state === 'boot' || state === 'lobby') return this.music.set('lobby');
+    if (state === 'gameover' || !run) return this.music.set(null);
+    const enemies = run.training ? 0 : run.guards.length;
+    const intensity = run.endless ? 1 : Math.min(0.84, enemies / MUSIC.fullIntensityEnemies);
+    const duck = state === 'paused' || state === 'reading' ? MUSIC.duckPaused : this.mini?.active ? MUSIC.duckMini : 1;
+    this.music.set('museum', intensity, duck, run.endless ? MUSIC.endlessTempo : 1);
   }
 
   private onIntroEvent(e: IntroEvent): void {
@@ -379,6 +478,7 @@ export class Game {
       this.input.releaseAll();
       this.hud?.setExhibitPrompt(null);
       this.mini?.open(e, run.cleared / run.exhibitTotal);
+      this.tut.opened = true;
       this.sfx.play('page');
     }
   }
@@ -597,6 +697,8 @@ export class Game {
   private showResults(): void {
     const run = this.museum?.run;
     if (!run) return;
+    // One run is enough of a tutorial: don't nag on the next one.
+    this.finishTutorial();
     const s = run.score;
     const rec = this.save.recordRun(
       {

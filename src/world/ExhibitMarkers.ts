@@ -50,6 +50,11 @@ export class ExhibitMarkers {
     }
   }
 
+  /** Meshes worth a soft glow on High quality. */
+  get glowMeshes(): Mesh[] {
+    return this.markers.map((m) => m.gem);
+  }
+
   /** `near` = exhibit in reach (or null); `known(id)` = already in the Archive. */
   update(dt: number, near: Exhibit | null, known: (id: string) => boolean): void {
     this.t += dt;

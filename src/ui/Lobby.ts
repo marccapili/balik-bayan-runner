@@ -24,6 +24,8 @@ export interface LobbyCallbacks {
   onPurchase(kind: 'skin' | 'claim' | 'daily' | 'frame'): void;
   onToggleMute(): void;
   onToggleReduced(): void;
+  /** Any other setting changed from the Settings panel (already saved by the caller). */
+  onSetting(key: 'musicVolume' | 'sfxVolume' | 'quality' | 'showFps' | 'largeText' | 'tutorial', value: number | string | boolean): void;
   onReset(): void;
   onClick(): void;
 }
@@ -136,6 +138,16 @@ export class Lobby {
     this.col = $(this.root, '.collection');
 
     this.root.addEventListener('click', (e) => this.onClick(e));
+    // Volume sliders: live while dragging.
+    this.root.addEventListener('input', (e) => {
+      const el = e.target as HTMLInputElement;
+      if (el.dataset.vol === 'music' || el.dataset.vol === 'sfx') {
+        const v = Number(el.value) / 100;
+        this.cb.onSetting(el.dataset.vol === 'music' ? 'musicVolume' : 'sfxVolume', v);
+        const out = el.parentElement?.querySelector('output');
+        if (out) out.textContent = `${el.value}%`;
+      }
+    });
     this.root.addEventListener('submit', (e) => {
       e.preventDefault();
       const input = this.root.querySelector<HTMLInputElement>('.nick-input');
@@ -293,6 +305,22 @@ export class Lobby {
       case 'reduced':
         this.cb.onToggleReduced();
         this.renderPanel();
+        break;
+      case 'quality':
+        this.cb.onSetting('quality', el.dataset.q ?? 'auto');
+        this.renderPanel();
+        break;
+      case 'fps':
+        this.cb.onSetting('showFps', !this.save.data.settings.showFps);
+        this.renderPanel();
+        break;
+      case 'largeText':
+        this.cb.onSetting('largeText', !this.save.data.settings.largeText);
+        this.renderPanel();
+        break;
+      case 'tutorial':
+        this.cb.onSetting('tutorial', true);
+        this.toast('Lalabas ulit ang tips sa susunod mong run 👍');
         break;
       case 'reset':
         if (performance.now() < this.resetArmed) {
@@ -631,8 +659,20 @@ export class Lobby {
       case 'settings': {
         const armed = performance.now() < this.resetArmed;
         body.innerHTML = `<h2>Settings ⚙</h2>
-          <button class="btn toggle" data-act="mute">Sound effects: <b>${d.settings.muted ? 'OFF 🔇' : 'ON 🔊'}</b></button>
-          <button class="btn toggle" data-act="reduced">Reduced effects: <b>${d.settings.reducedEffects ? 'ON' : 'OFF'}</b><small>Less particles, walang camera shake</small></button>
+          <h3>Tunog</h3>
+          <button class="btn toggle" data-act="mute">Lahat ng tunog: <b>${d.settings.muted ? 'OFF 🔇' : 'ON 🔊'}</b></button>
+          <label class="vol-row">🎵 Music <input type="range" min="0" max="100" step="5" data-vol="music" value="${Math.round(d.settings.musicVolume * 100)}" aria-label="Music volume" /><output>${Math.round(d.settings.musicVolume * 100)}%</output></label>
+          <label class="vol-row">🔔 SFX <input type="range" min="0" max="100" step="5" data-vol="sfx" value="${Math.round(d.settings.sfxVolume * 100)}" aria-label="Sound effects volume" /><output>${Math.round(d.settings.sfxVolume * 100)}%</output></label>
+          <h3>Graphics</h3>
+          <div class="seg" role="group" aria-label="Graphics quality">${(['auto', 'low', 'high'] as const)
+            .map((q) => `<button class="seg-btn ${d.settings.quality === q ? 'on' : ''}" data-act="quality" data-q="${q}">${q === 'auto' ? 'Auto' : q === 'low' ? 'Low 🔋' : 'High ✨'}</button>`)
+            .join('')}</div>
+          <p class="cd-note">Low = mas magaan sa luma/mahinang phone. High = mas sharp + konting glow.</p>
+          <button class="btn toggle" data-act="fps">Show FPS: <b>${d.settings.showFps ? 'ON' : 'OFF'}</b><small>Pang-check ng performance sa phone mo</small></button>
+          <h3>Accessibility</h3>
+          <button class="btn toggle" data-act="reduced">Reduced effects: <b>${d.settings.reducedEffects ? 'ON' : 'OFF'}</b><small>Less particles, walang camera shake / flicker</small></button>
+          <button class="btn toggle" data-act="largeText">Malaking text: <b>${d.settings.largeText ? 'ON' : 'OFF'}</b></button>
+          <button class="btn toggle" data-act="tutorial">Ipakita ulit ang tutorial tips 🎓</button>
           <button class="btn danger" data-act="reset">${armed ? 'Sure ka? Tap ulit para i-reset 😬' : 'Reset progress 🧹'}</button>`;
         break;
       }
