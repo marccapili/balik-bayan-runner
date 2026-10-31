@@ -69,9 +69,7 @@ export const GUARD = {
   maxSpawnDistance: 18,
 } as const;
 
-/** Data-driven difficulty: when each extra guard joins (seconds). Dogs/folklore arrive in M5. */
-export const GUARD_SCHEDULE: readonly number[] = [0, 45, 90, 150];
-export const MAX_GUARDS = 4;
+/** Who joins the run and when lives in data/enemies.ts (SPAWN_SCHEDULE). */
 
 /** Game-feel numbers (screen shake, blink, game-over beat). */
 export const FEEDBACK = {

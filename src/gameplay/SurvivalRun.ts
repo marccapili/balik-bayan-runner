@@ -1,9 +1,12 @@
 import type { NavGrid } from '../ai/NavGrid';
 import { ABILITIES, type AbilityKind } from '../data/abilities';
 import { PLAYER_CONFIG } from '../data/config';
-import { GUARD, GUARD_SCHEDULE, MAX_GUARDS } from '../data/gameplay';
+import { SPAWN_SCHEDULE, TIKBALANG, type EnemyKind } from '../data/enemies';
+import { GUARD } from '../data/gameplay';
 import { TRAINING } from '../data/training';
 import { GuardBrain } from '../enemies/GuardBrain';
+import { DogBrain, LungerBrain, TikbalangBrain } from '../enemies/LungerBrain';
+import { MultoBrain } from '../enemies/MultoBrain';
 import type { CollisionWorld } from '../physics/Collision';
 import { clamp, lerp, type Vec2 } from '../utils/math';
 import { Ability } from './Ability';
@@ -16,7 +19,11 @@ export type RunEvent =
   | { type: 'hit'; pos: Vec2; dir: Vec2; hearts: number }
   | { type: 'alert'; guard: number }
   | { type: 'bonus'; points: number }
-  | { type: 'guardJoined'; guard: number }
+  | { type: 'guardJoined'; guard: number; kind: EnemyKind }
+  | { type: 'windup'; guard: number; kind: EnemyKind }
+  | { type: 'bonk'; pos: Vec2; guard: number }
+  | { type: 'illusion'; pos: Vec2 }
+  | { type: 'decoyPop'; pos: Vec2 }
   | { type: 'ability'; kind: AbilityKind; pos: Vec2; dir: Vec2; affected: number }
   | { type: 'blocked'; pos: Vec2; guard: number }
   | { type: 'dead' };
@@ -27,6 +34,18 @@ export interface Dummy {
   home: Vec2;
   /** Seconds left knocked over. */
   stun: number;
+}
+
+/** Tikbalang illusion: a harmless copy that circles the hero, then vanishes (or pops when touched). */
+export interface Decoy {
+  pos: Vec2;
+  yaw: number;
+  /** Seconds left. */
+  ttl: number;
+  /** Orbit angle around the hero. */
+  angle: number;
+  /** Orbit direction (+1 / -1). */
+  spin: number;
 }
 
 /**
@@ -45,6 +64,10 @@ export class SurvivalRun {
   /** Training mode: no guards, no coins, short cooldown, practice dummies. */
   training = false;
   dummies: Dummy[] = [];
+  /** Tikbalang illusion copies currently in play. */
+  decoys: Decoy[] = [];
+  /** How many SPAWN_SCHEDULE entries have joined (the intro guard is entry 0). */
+  private spawned = 0;
   private events: RunEvent[] = [];
   /** Events raised between updates (ability use); handed out once by the next `update`. */
   private queued: RunEvent[] = [];
@@ -70,6 +93,8 @@ export class SurvivalRun {
     this.pickups.reset(player);
     if (training) for (const it of this.pickups.items) it.active = false;
     this.guards.length = 0;
+    this.decoys = [];
+    this.spawned = 0;
     this.over = false;
     this.events = [];
     this.queued = [];
@@ -91,9 +116,36 @@ export class SurvivalRun {
     if (!pool.length) pool = this.spots.filter((s) => ok(s, false));
     if (!pool.length) pool = [this.spawnSpot(player)];
     const at = pool[Math.floor(this.rng() * pool.length)]!;
-    const g = new GuardBrain({ ...at }, this.nav, this.sight, this.world, this.spots, this.rng, 0);
+    const g = this.makeEnemy(SPAWN_SCHEDULE[0]?.kind ?? 'guard', { ...at }, 0);
     g.yaw = Math.atan2(at.x - player.x, at.z - player.z); // facing away from the hero
     this.guards.push(g);
+    this.spawned = 1;
+    return g;
+  }
+
+  /** Enemy factory: every kind shares the GuardBrain interface (state, pos, stun, hunt...). */
+  makeEnemy(kind: EnemyKind, at: Vec2, repathOffset: number): GuardBrain {
+    const args = [at, this.nav, this.sight, this.world, this.spots, this.rng, repathOffset] as const;
+    switch (kind) {
+      case 'dog':
+        return new DogBrain(...args);
+      case 'multo':
+        return new MultoBrain(...args);
+      case 'tikbalang':
+        return new TikbalangBrain(...args);
+      default:
+        return new GuardBrain(...args);
+    }
+  }
+
+  /** Debug/test: drops an enemy of `kind` into the run right now, hunting. */
+  spawnEnemy(kind: EnemyKind, player: Vec2, at?: Vec2): GuardBrain {
+    const i = this.guards.length;
+    const g = this.makeEnemy(kind, at ? { ...at } : this.spawnSpot(player), i * 0.1);
+    g.hunt(player);
+    this.guards.push(g);
+    // Queued so it also reaches the scene when called between updates (debug spawns).
+    this.queued.push({ type: 'guardJoined', guard: i, kind });
     return g;
   }
 
@@ -129,11 +181,17 @@ export class SurvivalRun {
         const dir = d > 1e-4 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
         // Closer guards get shoved further; collision keeps them out of walls.
         const push = w.push * (1 - (d / w.radius) * 0.5);
-        g.pos = this.world.move(g.pos, { x: dir.x * push, z: dir.z * push }, GUARD.radius);
+        g.pos = this.world.move(g.pos, { x: dir.x * push, z: dir.z * push }, g.radius);
         g.vel = { x: 0, z: 0 };
         g.stun(w.stun);
         affected++;
       }
+      // Illusions burst in the shockwave too.
+      this.decoys = this.decoys.filter((dc) => {
+        if (Math.hypot(dc.pos.x - player.x, dc.pos.z - player.z) > w.radius) return true;
+        this.queued.push({ type: 'decoyPop', pos: { ...dc.pos } });
+        return false;
+      });
       for (const dm of this.dummies) {
         const dx = dm.pos.x - player.x;
         const dz = dm.pos.z - player.z;
@@ -180,6 +238,7 @@ export class SurvivalRun {
     if (!this.peaceful) {
       this.spawnDue(player);
       this.updateGuards(dt, player);
+      this.updateDecoys(dt, player);
     }
     return this.events;
   }
@@ -212,15 +271,46 @@ export class SurvivalRun {
     });
   }
 
+  /** Difficulty director: brings in each SPAWN_SCHEDULE entry once its time comes. */
   private spawnDue(player: Vec2): void {
-    const due = GUARD_SCHEDULE.filter((t) => this.score.time >= t).length;
-    while (this.guards.length < Math.min(due, MAX_GUARDS)) {
-      const i = this.guards.length;
-      const g = new GuardBrain(this.spawnSpot(player), this.nav, this.sight, this.world, this.spots, this.rng, i * 0.1);
-      g.hunt(player);
-      this.guards.push(g);
-      this.events.push({ type: 'guardJoined', guard: i });
+    while (this.spawned < SPAWN_SCHEDULE.length && this.score.time >= SPAWN_SCHEDULE[this.spawned]!.at) {
+      this.spawnEnemy(SPAWN_SCHEDULE[this.spawned]!.kind, player);
+      this.spawned++;
     }
+  }
+
+  private castIllusion(from: GuardBrain, player: Vec2): void {
+    const T = TIKBALANG;
+    const base = Math.atan2(from.pos.x - player.x, from.pos.z - player.z);
+    for (let k = 0; k < T.illusionCount; k++) {
+      const spin = k % 2 === 0 ? 1 : -1;
+      this.decoys.push({ pos: { ...from.pos }, yaw: from.yaw, ttl: T.illusionSeconds, angle: base + spin * 0.6, spin });
+    }
+    this.events.push({ type: 'illusion', pos: { ...from.pos } });
+  }
+
+  private updateDecoys(dt: number, player: Vec2): void {
+    const T = TIKBALANG;
+    const reach = PLAYER_CONFIG.radius + T.stats.radius;
+    this.decoys = this.decoys.filter((dc) => {
+      dc.ttl -= dt;
+      // Circle the hero at a menacing distance, like the real one sizing you up.
+      dc.angle += dc.spin * (T.illusionSpeed / 3.5) * dt;
+      const tx = player.x + Math.sin(dc.angle) * 3.5 - dc.pos.x;
+      const tz = player.z + Math.cos(dc.angle) * 3.5 - dc.pos.z;
+      const d = Math.hypot(tx, tz);
+      if (d > 0.05) {
+        const s = Math.min(d, T.illusionSpeed * dt);
+        dc.pos = this.world.move(dc.pos, { x: (tx / d) * s, z: (tz / d) * s }, T.stats.radius * 0.8);
+        dc.yaw = Math.atan2(tx, tz);
+      }
+      // Copies appear on the tikbalang (often right next to the hero): give them a moment to spread out first.
+      const settled = dc.ttl < T.illusionSeconds - T.illusionGrace;
+      const touched = settled && Math.hypot(player.x - dc.pos.x, player.z - dc.pos.z) < reach;
+      if (dc.ttl > 0 && !touched) return true;
+      this.events.push({ type: 'decoyPop', pos: { ...dc.pos } });
+      return false;
+    });
   }
 
   private spawnSpot(player: Vec2): Vec2 {
@@ -242,16 +332,21 @@ export class SurvivalRun {
 
 
   private updateGuards(dt: number, player: Vec2): void {
-    const reach = PLAYER_CONFIG.radius + GUARD.radius + GUARD.contactPadding;
     this.guards.forEach((g, i) => {
       g.chaseSpeed = this.chaseSpeed;
       g.update(dt, player);
       if (g.justAlerted) this.events.push({ type: 'alert', guard: i });
+      if (g instanceof LungerBrain) {
+        if (g.justWoundUp) this.events.push({ type: 'windup', guard: i, kind: g.kind });
+        if (g.justBonked) this.events.push({ type: 'bonk', pos: { ...g.pos }, guard: i });
+      }
+      if (g instanceof TikbalangBrain && g.wantsIllusion) this.castIllusion(g, player);
     });
     for (let i = 0; i < this.guards.length; i++) for (let j = i + 1; j < this.guards.length; j++) this.guards[i]!.separateFrom(this.guards[j]!);
 
     for (const g of this.guards) {
-      if (g.state === 'stunned') continue;
+      if (g.state === 'stunned' || !g.canHurt) continue;
+      const reach = PLAYER_CONFIG.radius + g.radius + GUARD.contactPadding;
       const dx = player.x - g.pos.x;
       const dz = player.z - g.pos.z;
       const d = Math.hypot(dx, dz);
@@ -261,7 +356,7 @@ export class SurvivalRun {
         // Kalasag: the hit bounces off, the guard staggers back, the shield is spent.
         this.ability.end();
         this.health.grantInvuln(0.5);
-        g.pos = this.world.move(g.pos, { x: -dir.x * 1.2, z: -dir.z * 1.2 }, GUARD.radius);
+        g.pos = this.world.move(g.pos, { x: -dir.x * 1.2, z: -dir.z * 1.2 }, g.radius);
         g.stun(ABILITIES.shield.blockStun);
         this.events.push({ type: 'blocked', pos: { ...player }, guard: this.guards.indexOf(g) });
         continue;

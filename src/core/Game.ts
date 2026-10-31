@@ -1,9 +1,10 @@
 import { Engine } from '@babylonjs/core/Engines/engine';
-import { Sfx } from '../audio/Sfx';
+import { Sfx, type SfxName } from '../audio/Sfx';
 import { InputManager } from '../controls/InputManager';
 import { RENDER_CONFIG } from '../data/config';
 import { FEEDBACK } from '../data/gameplay';
 import { ABILITIES } from '../data/abilities';
+import { ENEMY_INTRO, type EnemyKind } from '../data/enemies';
 import { HEROES, type HeroId } from '../data/heroes';
 import { describe } from '../gameplay/Missions';
 import type { IntroEvent } from '../gameplay/IntroSequence';
@@ -15,6 +16,9 @@ import { Lobby } from '../ui/Lobby';
 import { Transition } from '../ui/Transition';
 import { SaveManager } from './SaveManager';
 import { GAME_TRANSITIONS, StateMachine, type GameState } from './StateMachine';
+
+/** Sound played when each kind of enemy joins the run. */
+const JOIN_SOUND: Record<EnemyKind, SfxName> = { guard: 'alert', dog: 'bark', multo: 'whoo', tikbalang: 'neigh' };
 
 /** Owns the engine, the render loop, both scenes and the top-level state machine. */
 export class Game {
@@ -372,7 +376,7 @@ export class Game {
         this.sfx.play(e.kind);
         if (e.kind === 'shockwave' && e.affected > 0) {
           const p = m.toScreen(e.pos, 2.4);
-          hud?.floatText(p.x, p.y, e.affected > 1 ? `${e.affected} guards stunned!` : 'Guard stunned!', 'bonus');
+          hud?.floatText(p.x, p.y, e.affected > 1 ? `${e.affected} kalaban stunned!` : 'Stunned!', 'bonus');
         }
         break;
       }
@@ -382,8 +386,25 @@ export class Game {
         hud?.floatText(p.x, p.y, 'Blocked! 🛡️', 'bonus');
         break;
       }
-      case 'guardJoined':
-        if (e.guard > 0) hud?.showRoom('👮 May bagong guard!', 'Dumami sila, bilisan mo pa');
+      case 'guardJoined': {
+        if (e.guard === 0) break;
+        const intro = ENEMY_INTRO[e.kind];
+        hud?.showRoom(intro.title, intro.subtitle);
+        this.sfx.play(JOIN_SOUND[e.kind]);
+        break;
+      }
+      case 'windup':
+        this.sfx.play(e.kind === 'dog' ? 'growl' : 'neigh');
+        break;
+      case 'bonk': {
+        this.sfx.play('thump');
+        const p = m.toScreen(e.pos, 3);
+        hud?.floatText(p.x, p.y, 'BONK! 💫', 'bonus');
+        break;
+      }
+      case 'illusion':
+      case 'decoyPop':
+        this.sfx.play('poof');
         break;
       case 'bonus': {
         this.sfx.play('bonus');
@@ -429,6 +450,14 @@ export class Game {
       const g = this.museum?.run.guards[i];
       if (g) g.pos = { x, z };
     },
+    spawnEnemy: (kind, x, z) => {
+      const m = this.museum;
+      if (!m) return;
+      m.run.spawnEnemy(kind, m.player.position, x !== undefined && z !== undefined ? { x, z } : undefined);
+    },
+    setInvulnerable: (seconds) => {
+      this.museum?.run.health.grantInvuln(seconds);
+    },
     setPeaceful: (p) => {
       if (this.museum) this.museum.run.peaceful = p;
     },
@@ -467,7 +496,8 @@ export class Game {
       score: run?.score.score,
       runCoins: run?.score.runCoins,
       runTime: run?.score.time,
-      guards: run?.guards.map((g) => ({ x: g.pos.x, z: g.pos.z, state: g.state, hunting: g.hunting })),
+      guards: run?.guards.map((g) => ({ kind: g.kind, x: g.pos.x, z: g.pos.z, state: g.state, hunting: g.hunting, canHurt: g.canHurt })),
+      decoys: run?.decoys.map((d) => ({ x: d.pos.x, z: d.pos.z, ttl: d.ttl })),
       ability: run && { kind: run.ability.kind, ready: run.ability.ready, active: run.ability.active, uses: run.ability.uses, cooldownLeft: run.ability.cooldownLeft },
       shielded: run?.shielded ?? false,
       speedMultiplier: p?.motor.speedMultiplier,
@@ -499,6 +529,10 @@ export class Game {
 export interface DebugHooks {
   teleport(x: number, z: number): void;
   moveGuard(i: number, x: number, z: number): void;
+  /** Drops an enemy into the run now (hunting); at (x, z) if given. */
+  spawnEnemy(kind: EnemyKind, x?: number, z?: number): void;
+  /** Hero can't be hurt for `seconds` (lets tests watch enemies up close). */
+  setInvulnerable(seconds: number): void;
   setPeaceful(p: boolean): void;
   addCoins(n: number): void;
   addHiyas(n: number): void;

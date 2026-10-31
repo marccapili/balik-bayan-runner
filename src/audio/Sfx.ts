@@ -2,7 +2,7 @@
  * Tiny synthesised sound effects (Web Audio, no files, no licensing).
  * The AudioContext is created on the first user gesture to satisfy autoplay rules.
  */
-export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim';
+export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim' | 'bark' | 'growl' | 'whoo' | 'neigh' | 'thump' | 'poof';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -143,6 +143,34 @@ export class Sfx {
         break;
       case 'denied':
         this.tone(180, t, 0.12, 'square', 0.05);
+        break;
+      case 'bark':
+        // Two short ruff-ruffs.
+        for (const d of [0, 0.16]) {
+          this.noise(t + d, 0.09, 0.35, 1400);
+          this.tone(420, t + d, 0.09, 'sawtooth', 0.09, 220);
+        }
+        break;
+      case 'growl':
+        this.tone(95, t, 0.6, 'sawtooth', 0.09, 80);
+        this.noise(t, 0.6, 0.18, 300);
+        break;
+      case 'whoo':
+        // Ghostly wobble: slow pitch bend up and down.
+        this.tone(330, t, 0.6, 'sine', 0.1, 520);
+        this.tone(520, t + 0.55, 0.7, 'sine', 0.08, 300);
+        break;
+      case 'neigh':
+        [880, 1046, 932, 1175, 988].forEach((f, i) => this.tone(f, t + i * 0.07, 0.1, 'sawtooth', 0.05, f * 0.8));
+        this.noise(t + 0.3, 0.3, 0.12, 2000);
+        break;
+      case 'thump':
+        this.noise(t, 0.25, 0.6, 400);
+        this.tone(90, t, 0.3, 'sine', 0.25, 40);
+        break;
+      case 'poof':
+        this.noise(t, 0.3, 0.25, 4000);
+        this.tone(1200, t, 0.25, 'sine', 0.05, 2400);
         break;
       case 'claim':
         [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, t + i * 0.06, 0.2, 'sine', 0.1));

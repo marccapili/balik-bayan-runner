@@ -1,5 +1,16 @@
 # Development changelog
 
+## M5 Enemies & difficulty — 2026-10-31 (awaiting feedback)
+- Difficulty director (`src/data/enemies.ts` → `SPAWN_SCHEDULE`): guard at 0:00 (the intro guard), dog 0:35, guard 1:10, multo 1:40, dog 2:15, tikbalang 2:50, guard 3:40, multo 4:30. Each arrival gets its own toast + sound. Guard chase speed still ramps with run time.
+- Guard dog (aspin in a security vest): faster than guards, shorter sight. When it has a clear line within 6 m it crouches and growls for 0.7 s while a red lane shows where it will lunge; the aim is locked, so stepping sideways dodges it. Lunge ~5.9 m, then it pants for 1.1 s. 3.5 s between lunges.
+- Multo (white-sheet ghost, labelled Folklore): slow, never gives up, floats straight through walls. Fades out every ~5 s for 2.4 s; while faded it can't hurt you (a faint shimmer stays visible so it's fair to track).
+- Tikbalang (horse-headed, labelled Folklore): big and a bit slower. Rears up for 0.9 s (red lane + neigh), then charges ~14 m in a straight line; slamming into a wall stuns it for 1.6 s ("BONK!"). Every 10 s of chasing it casts 2 purple see-through copies that circle the hero for 4 s; they are harmless and pop when touched (after a 0.8 s spread-out moment) or when hit by Bonifacio's shockwave.
+- Folklore basis: "multo" is the common Filipino word for ghost; the tikbalang is a tall horse-headed creature said to lead travellers astray (the illusions nod to that). Their in-game powers are game inventions.
+- All abilities work on every kind: shockwave stuns/shoves all of them, Lapu-Lapu's shield blocks any of them, Gabriela's dash i-frames dodge lunges.
+- Reduced effects (settings): no lane pulsing, no illusion flicker, no camera shake on tikbalang bonks.
+- Pooling: one view per scheduled arrival is built when the museum loads (none mid-run); views are bound to enemies per run and returned on replay. Enemy materials are shared.
+- Tests: 99 unit (12 new: director order/timing, dog telegraph + locked aim + cooldown, multo through walls + harmless while faded, tikbalang charge + wall bonk, illusions expire/pop/no damage, abilities on every kind), 98 browser checks (new: toast, dog windup → lunge, multo through a wall, tikbalang illusions). `node tests/e2e/showcase.mjs` now also renders each enemy close-up.
+
 ## M4 follow-up — 2026-10-31 (owner feedback)
 - Cooldowns: Rizal sprint 1:30, Lapu-Lapu shield 1:00 (owner-set); Bonifacio shockwave 1:15, Gabriela dash 0:45 to balance. Long cooldowns show as m:ss on the ability button.
 - Training mode: "🎯 Training" button in the lobby tries the previewed hero (locked heroes too, nothing is bought). Runs in the Hall of Heroes with the doorways roped off; no guards, no coins, no score, no missions/leaderboard. Three straw practice dummies react to Bonifacio's shockwave and Lapu-Lapu's shield; ability cooldown is 3 s while training. Exit via the tag button or pause → lobby.

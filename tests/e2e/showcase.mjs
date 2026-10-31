@@ -57,4 +57,38 @@ for (const view of ['front', 'game']) {
     window.__bbr.debug.setPeaceful(true);
   });
 }
+// M5 enemies: dog, multo, tikbalang and a tikbalang illusion, frozen at the origin facing the camera.
+const FRAMES = { dog: [1.2, -3.4, 0.55], multo: [1.6, -4.8, 1.2], tikbalang: [2.3, -6.4, 1.7], decoy: [2.3, -6.4, 1.7] };
+for (const kind of ['dog', 'multo', 'tikbalang', 'decoy']) {
+  for (const view of ['front', 'game']) {
+    await page.evaluate(([kind, view, f]) => {
+      const g = window.__bbr;
+      g.restart();
+      g.debug.teleport(2.6, -3.2);
+      const run = g.museum.run;
+      if (kind === 'decoy') run.decoys.push({ pos: { x: 0, z: 0 }, yaw: Math.PI, ttl: 2, angle: 0, spin: 1 });
+      else run.spawnEnemy(kind, { x: 2.6, z: -3.2 }, { x: 0, z: 0 }).yaw = Math.PI;
+      const cam = g.museum.cam;
+      document.getElementById('ui').style.display = 'none';
+      if (view === 'front') Object.assign(cam.offset, { x: 0.4, y: f[0], z: f[1] });
+      else Object.assign(cam.offset, { x: 0, y: 11.03, z: -8.62 });
+      cam.snapTo({ x: 0, z: 0 });
+      cam.camera.setTarget(new cam.camera.position.constructor(0, view === 'game' ? 0.6 : f[2], 0));
+    }, [kind, view, FRAMES[kind]]);
+    await new Promise((r) => setTimeout(r, 400));
+    await page.evaluate(([view, f]) => {
+      const g = window.__bbr;
+      g.pause();
+      const cam = g.museum.cam;
+      cam.snapTo({ x: 0, z: 0 });
+      cam.camera.setTarget(new cam.camera.position.constructor(0, view === 'game' ? 0.6 : f[2], 0));
+    }, [view, FRAMES[kind]]);
+    await new Promise((r) => setTimeout(r, 400));
+    await page.screenshot({ path: `tests/e2e/screenshots/enemy-${kind}-${view}.png`, clip: view !== 'game' ? { x: 340, y: 40, width: 520, height: 620 } : undefined });
+    await page.evaluate(() => {
+      document.getElementById('ui').style.display = '';
+      window.__bbr.resume();
+    });
+  }
+}
 await browser.close();

@@ -509,6 +509,70 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   }
 }
 
+// ── M5 enemies: dog telegraph + lunge, multo through walls, tikbalang illusions, director toasts ──
+{
+  const { ctx, page, errors } = await bootPage(browser, { viewport: { width: 1280, height: 720 } }, '?play');
+  const until = async (pred, maxMs = 15000) => {
+    const t0 = Date.now();
+    let s = await snap(page);
+    while (!pred(s) && Date.now() - t0 < maxMs) {
+      await wait(80);
+      s = await snap(page);
+    }
+    return s;
+  };
+  await until((s) => s.guards.length >= 1);
+  // Park the opening guard far away and keep the hero safe while we watch the new enemies.
+  await page.evaluate(() => {
+    const b = window.__bbr;
+    b.debug.setInvulnerable(1e6);
+    b.debug.moveGuard(0, -26, -20);
+    b.debug.teleport(0, 4);
+    b.debug.spawnEnemy('dog', 4.5, 4);
+  });
+  await page.waitForFunction(() => /aso/i.test(document.querySelector('.room-toast')?.textContent ?? ''), null, { timeout: 5000 }).catch(() => {});
+  const toast = await page.textContent('.room-toast');
+  check('a new enemy kind announces itself with its own toast', /aso/i.test(toast ?? ''), toast);
+  const dogIdx = (s) => s.guards.findIndex((g) => g.kind === 'dog');
+  const wu = await until((s) => s.guards[dogIdx(s)]?.state === 'windup', 12000);
+  check('dog telegraphs its lunge (windup)', wu.guards[dogIdx(wu)]?.state === 'windup', wu.guards[dogIdx(wu)]?.state);
+  await page.screenshot({ path: `${OUT}/m5-dog-windup.png` });
+  const dash = await until((s) => ['dash', 'recover'].includes(s.guards[dogIdx(s)]?.state), 6000);
+  check('dog lunges after the telegraph', ['dash', 'recover'].includes(dash.guards[dogIdx(dash)]?.state), dash.guards[dogIdx(dash)]?.state);
+
+  // Multo drifts straight through the x = 10 wall.
+  await page.evaluate(() => {
+    const b = window.__bbr;
+    const run = b.museum.run;
+    run.guards.forEach((g, i) => i > 0 && b.debug.moveGuard(i, -26, 20));
+    b.debug.teleport(16, 4);
+    b.debug.spawnEnemy('multo', 5, 4);
+  });
+  const mIdx = (s) => s.guards.findIndex((g) => g.kind === 'multo');
+  const through = await until((s) => s.guards[mIdx(s)]?.x > 11, 20000);
+  check('multo floats through walls', through.guards[mIdx(through)]?.x > 11, `x=${through.guards[mIdx(through)]?.x?.toFixed(1)}`);
+  await page.screenshot({ path: `${OUT}/m5-multo.png` });
+
+  // Tikbalang: casts its illusion copies while chasing.
+  await page.evaluate(() => {
+    const b = window.__bbr;
+    b.museum.run.guards.forEach((g, i) => b.debug.moveGuard(i, -26, i % 2 ? 20 : -20));
+    b.debug.teleport(0, 0);
+    b.debug.spawnEnemy('tikbalang', 0, -9);
+  });
+  await wait(300);
+  await page.screenshot({ path: `${OUT}/m5-tikbalang.png` });
+  const ill = await until((s) => s.decoys.length > 0, 30000);
+  check('tikbalang casts illusion copies', ill.decoys.length > 0, `decoys=${ill.decoys.length}`);
+  await page.screenshot({ path: `${OUT}/m5-illusion.png` });
+  const gone = await until((s) => s.decoys.length === 0, 20000);
+  check('illusions vanish on their own', gone.decoys.length === 0);
+  const kinds = new Set(gone.guards.map((g) => g.kind));
+  check('all four enemy kinds are in play', ['guard', 'dog', 'multo', 'tikbalang'].every((k) => kinds.has(k)), [...kinds].join(','));
+  check('no console errors (enemies)', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
 // ── Phone (landscape + portrait) with touch joystick ──
 for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }], ['phone-portrait', { width: 390, height: 844 }]]) {
   const { ctx, page, errors } = await bootPage(browser, { viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });

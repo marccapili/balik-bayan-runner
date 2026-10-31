@@ -1,16 +1,14 @@
 import type { Engine } from '@babylonjs/core/Engines/engine';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import { Scene } from '@babylonjs/core/scene';
 import { NavGrid } from '../ai/NavGrid';
 import { FollowCamera } from '../camera/FollowCamera';
 import { Player } from '../characters/Player';
 import type { InputManager } from '../controls/InputManager';
-import { FEEDBACK, HEALTH, MAX_GUARDS, PICKUPS } from '../data/gameplay';
+import { FEEDBACK, HEALTH, PICKUPS } from '../data/gameplay';
 import { INTRO } from '../data/lobby';
 import { IntroSequence, type IntroEvent } from '../gameplay/IntroSequence';
 import type { GuardBrain } from '../enemies/GuardBrain';
@@ -21,14 +19,14 @@ import { AbilityViews } from '../world/AbilityViews';
 import { TrainingProps } from '../world/TrainingProps';
 import { TRAINING } from '../data/training';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
-import { GuardView, sightRingMaterial } from '../enemies/GuardView';
+import { DecoyView, EnemyMaterials, makeEnemyView, type EnemyView } from '../enemies/EnemyViews';
+import { SPAWN_SCHEDULE, TIKBALANG, type EnemyKind } from '../data/enemies';
 import { SurvivalRun, type RunEvent } from '../gameplay/SurvivalRun';
 import { CollisionWorld } from '../physics/Collision';
 import { dampAngle, type Vec2 } from '../utils/math';
 import { Fx } from '../world/Fx';
 import { buildMuseum, type MuseumBuild } from '../world/MuseumBuilder';
 import { PickupViews } from '../world/PickupViews';
-import { blobShadow } from '../world/textures';
 import type { GameScene } from './GameScene';
 
 /** The museum run: hero, guards, pickups and camera. Gameplay rules live in SurvivalRun. */
@@ -41,7 +39,12 @@ export class MuseumScene implements GameScene {
   private readonly museum: MuseumBuild;
   private readonly fx: Fx;
   private readonly pickupViews: PickupViews;
-  private readonly guardViews: GuardView[] = [];
+  private readonly enemyMats: EnemyMaterials;
+  /** Pooled views per kind (built up-front from the spawn schedule, grown on demand). */
+  private readonly viewPool = new Map<EnemyKind, EnemyView[]>();
+  /** Which view renders which enemy this run. */
+  private readonly viewOf = new Map<GuardBrain, EnemyView>();
+  private readonly decoyViews: DecoyView[] = [];
   private room: Room | undefined;
   private blinkT = 0;
   private readonly portal: Portal;
@@ -90,18 +93,11 @@ export class MuseumScene implements GameScene {
 
     this.fx = new Fx(scene);
     this.pickupViews = new PickupViews(scene);
-    const shadowMat = new StandardMaterial('guardShadowMat', scene);
-    shadowMat.diffuseTexture = blobShadow(scene);
-    shadowMat.useAlphaFromDiffuseTexture = true;
-    shadowMat.disableLighting = true;
-    shadowMat.emissiveColor = Color3.Black();
-    const ringMat = sightRingMaterial(scene);
-    for (let i = 0; i < MAX_GUARDS; i++) {
-      const sh = CreateGround(`guardShadow${i}`, { width: 1.2, height: 1.2 }, scene);
-      sh.material = shadowMat;
-      sh.isPickable = false;
-      this.guardViews.push(new GuardView(scene, this.fx, sh, ringMat));
-    }
+    // Pool: one view per scheduled arrival, so nothing is built mid-run.
+    this.enemyMats = new EnemyMaterials(scene);
+    for (const { kind } of SPAWN_SCHEDULE) this.poolOf(kind).push(makeEnemyView(kind, scene, this.fx, this.enemyMats));
+    const tikbalangs = SPAWN_SCHEDULE.filter((e) => e.kind === 'tikbalang').length;
+    for (let i = 0; i < tikbalangs * TIKBALANG.illusionCount; i++) this.decoyViews.push(new DecoyView(scene, this.enemyMats));
     this.portal = new Portal(scene, this.fx.sparkTex);
     this.abilityViews = new AbilityViews(scene, this.fx.sparkTex);
     this.trainingProps = new TrainingProps(scene);
@@ -123,7 +119,7 @@ export class MuseumScene implements GameScene {
     this.cam.zoom = 1;
     this.cam.lookY = 0.6;
     this.cam.snapTo(spawn);
-    for (const v of this.guardViews) v.hide();
+    this.releaseViews();
     this.pickupViews.sync(this.run.pickups.items, 0);
     this.room = undefined;
   }
@@ -183,7 +179,7 @@ export class MuseumScene implements GameScene {
       }
       if (e === 'guardAlert') {
         this.introGuard?.hunt(p);
-        this.guardViews[0]?.flashAlert();
+        if (this.introGuard) this.viewFor(this.introGuard).flashAlert();
       }
     }
     const ph = intro.phase;
@@ -248,8 +244,41 @@ export class MuseumScene implements GameScene {
     this.syncWorld(dt);
   }
 
+  private poolOf(kind: EnemyKind): EnemyView[] {
+    let pool = this.viewPool.get(kind);
+    if (!pool) this.viewPool.set(kind, (pool = []));
+    return pool;
+  }
+
+  /** The view bound to `g`, taking a free pooled one (or building one) on first sight. */
+  private viewFor(g: GuardBrain): EnemyView {
+    let v = this.viewOf.get(g);
+    if (v) return v;
+    const pool = this.poolOf(g.kind);
+    const used = new Set(this.viewOf.values());
+    v = pool.find((x) => !used.has(x));
+    if (!v) pool.push((v = makeEnemyView(g.kind, this.scene, this.fx, this.enemyMats)));
+    v.reduced = this.reducedEffects;
+    this.viewOf.set(g, v);
+    return v;
+  }
+
+  private releaseViews(): void {
+    for (const v of this.viewOf.values()) v.hide();
+    this.viewOf.clear();
+    for (const d of this.decoyViews) d.hide();
+  }
+
   private syncWorld(dt: number): void {
-    this.run.guards.forEach((g, i) => this.guardViews[i]?.sync(g, dt));
+    for (const g of this.run.guards) this.viewFor(g).sync(g, dt);
+    const decoys = this.run.decoys;
+    while (this.decoyViews.length < decoys.length) this.decoyViews.push(new DecoyView(this.scene, this.enemyMats));
+    this.decoyViews.forEach((v, i) => {
+      const d = decoys[i];
+      if (!d) return v.hide();
+      v.reduced = this.reducedEffects;
+      v.sync(d, dt);
+    });
     this.pickupViews.sync(this.run.pickups.items, dt);
     if (this.run.training) this.trainingProps.sync(this.run.dummies, dt);
     const aspect = this.engine.getRenderWidth() / Math.max(1, this.engine.getRenderHeight());
@@ -281,7 +310,21 @@ export class MuseumScene implements GameScene {
         break;
       case 'alert':
       case 'guardJoined':
-        this.guardViews[e.guard]?.flashAlert();
+      case 'windup': {
+        const g = this.run.guards[e.guard];
+        if (g) this.viewFor(g).flashAlert();
+        break;
+      }
+      case 'bonk':
+        this.fx.dustRing(e.pos, 20);
+        this.fx.burst('rare', e.pos, 2.2, 10);
+        if (!this.reducedEffects) this.cam.shake(0.18, 0.2);
+        break;
+      case 'illusion':
+        this.fx.burst('illusion', e.pos, 1.4, 30);
+        break;
+      case 'decoyPop':
+        this.fx.burst('illusion', e.pos, 1.2, 16);
         break;
       default:
         break;
@@ -303,7 +346,8 @@ export class MuseumScene implements GameScene {
     this.portal.dispose();
     this.trainingProps.dispose();
     this.abilityViews.dispose();
-    for (const v of this.guardViews) v.dispose();
+    for (const pool of this.viewPool.values()) for (const v of pool) v.dispose();
+    for (const d of this.decoyViews) d.dispose();
     this.fx.dispose();
     this.museum.dispose();
     this.scene.dispose();

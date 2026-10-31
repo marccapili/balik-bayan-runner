@@ -9,13 +9,14 @@ import '@babylonjs/core/Particles/particleSystemComponent';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Vec2 } from '../utils/math';
 
-export type BurstKind = 'coin' | 'rare' | 'heart' | 'hit';
+export type BurstKind = 'coin' | 'rare' | 'heart' | 'hit' | 'illusion';
 
 const BURST_COLORS: Record<BurstKind, [string, string]> = {
   coin: ['#ffe28a', '#f2a93b'],
   rare: ['#f0c8ff', '#9b4dff'],
   heart: ['#ffd0da', '#ff3b5c'],
   hit: ['#ffffff', '#ff5a3c'],
+  illusion: ['#e4d4ff', '#7b4cd8'],
 };
 
 /** Pooled particle bursts + the guard "!" billboard. */
