@@ -305,3 +305,15 @@ describe('Training mode', () => {
     expect(ABILITIES.dash.cooldown).toBeLessThan(60);
   });
 });
+
+describe('Ability events (regression: sound/shake/shockwave repeating forever)', () => {
+  for (const kind of ['sprint', 'shield', 'shockwave', 'dash'] as const) {
+    it(`${kind}: the ability event is delivered exactly once`, () => {
+      const run = newRun(kind);
+      run.useAbility(hero, { x: 1, z: 0 });
+      let count = 0;
+      for (let i = 0; i < 120; i++) for (const e of run.update(1 / 30, hero)) if (e.type === 'ability') count++;
+      expect(count).toBe(1);
+    });
+  }
+});

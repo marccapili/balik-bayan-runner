@@ -46,6 +46,8 @@ export class SurvivalRun {
   training = false;
   dummies: Dummy[] = [];
   private events: RunEvent[] = [];
+  /** Events raised between updates (ability use); handed out once by the next `update`. */
+  private queued: RunEvent[] = [];
 
   constructor(
     private readonly nav: NavGrid,
@@ -70,6 +72,7 @@ export class SurvivalRun {
     this.guards.length = 0;
     this.over = false;
     this.events = [];
+    this.queued = [];
   }
 
   /**
@@ -145,14 +148,15 @@ export class SurvivalRun {
     } else if (this.ability.kind === 'dash') {
       this.health.grantInvuln(ABILITIES.dash.invulnerable);
     }
-    this.events.push({ type: 'ability', kind: this.ability.kind, pos: { ...player }, dir: { ...facing }, affected });
+    this.queued.push({ type: 'ability', kind: this.ability.kind, pos: { ...player }, dir: { ...facing }, affected });
     return true;
   }
 
   /** Events raised outside `update` (ability use) are delivered with the next update. */
   update(dt: number, player: Vec2): RunEvent[] {
-    const pending = this.events.filter((e) => e.type === 'ability');
-    this.events = pending;
+    // Delivered exactly once: the queue is emptied as it is handed over.
+    this.events = this.queued;
+    this.queued = [];
     if (this.over) return this.events;
     // Training never scores (no survival bonus to farm).
     if (!this.training) this.score.update(dt);

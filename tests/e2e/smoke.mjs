@@ -372,6 +372,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     await page.keyboard.press('Space');
     await wait(300);
     const s2 = await snap(page);
+    check('dash fires once (no repeating effect)', s2.abilityEvents === 1, `events=${s2.abilityEvents}`);
     check('ability respects its cooldown', s2.ability.uses === 1 && !s2.ability.ready && (await page.getAttribute('.ability-btn', 'data-left')) !== '');
     await page.screenshot({ path: `${OUT}/m4-dash.png` });
     check('no console errors (dash)', errors.length === 0, errors.slice(0, 3).join(' | '));
@@ -420,6 +421,9 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     check('Bonifacio shockwave stuns and shoves a nearby guard', s1.guards[0].state === 'stunned' && Math.hypot(s1.guards[0].x - s1.x, s1.guards[0].z - s1.z) > 3,
       `guard=${s1.guards[0].state} d=${Math.hypot(s1.guards[0].x - s1.x, s1.guards[0].z - s1.z).toFixed(2)}`);
     await page.screenshot({ path: `${OUT}/m4-shockwave.png` });
+    await wait(2000);
+    const s2 = await snap(page);
+    check('shockwave fires once (sound + shake do not repeat)', s2.abilityEvents === 1, `events=${s2.abilityEvents}`);
     check('no console errors (shockwave)', errors.length === 0, errors.slice(0, 3).join(' | '));
     await ctx.close();
   }

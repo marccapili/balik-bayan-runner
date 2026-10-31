@@ -30,6 +30,8 @@ export class Game {
   readonly sfx = new Sfx();
   /** Total simulated (unpaused) time across runs — used by tests. */
   simTime = 0;
+  /** Ability events handled (tests check each use plays its sound/effect once). */
+  private abilityEvents = 0;
   /** Real seconds left in the knocked-down beat before results appear. */
   private defeatLeft = 0;
   /** Set by the TAP TO DROP button; consumed by the intro. */
@@ -366,6 +368,7 @@ export class Game {
         this.sfx.play('alert');
         break;
       case 'ability': {
+        this.abilityEvents++;
         this.sfx.play(e.kind);
         if (e.kind === 'shockwave' && e.affected > 0) {
           const p = m.toScreen(e.pos, 2.4);
@@ -484,6 +487,7 @@ export class Game {
       z: p?.position.z,
       speed: p?.motor.speed,
       simTime: this.simTime,
+      abilityEvents: this.abilityEvents,
       fps: this.engine.getFps(),
       drawCalls: (this.engine as unknown as { _drawCalls?: { current: number } })._drawCalls?.current,
       meshes: this.museum?.scene.meshes.length,
