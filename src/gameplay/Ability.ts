@@ -11,7 +11,11 @@ export class Ability {
   activeLeft = 0;
   uses = 0;
 
-  constructor(readonly kind: AbilityKind) {}
+  /** `cooldown` defaults to the data value; training passes a short one. */
+  constructor(
+    readonly kind: AbilityKind,
+    readonly cooldown: number = ABILITIES[kind].cooldown,
+  ) {}
 
   get def(): (typeof ABILITIES)[AbilityKind] {
     return ABILITIES[this.kind];
@@ -27,13 +31,13 @@ export class Ability {
 
   /** 0 = just used, 1 = ready. */
   get cooldownFrac(): number {
-    return this.ready ? 1 : 1 - this.cooldownLeft / this.def.cooldown;
+    return this.ready ? 1 : 1 - this.cooldownLeft / this.cooldown;
   }
 
   /** Starts the ability if it is off cooldown. Returns whether it fired. */
   trigger(): boolean {
     if (!this.ready) return false;
-    this.cooldownLeft = this.def.cooldown;
+    this.cooldownLeft = this.cooldown;
     this.activeLeft = this.def.duration;
     this.uses++;
     return true;

@@ -46,6 +46,8 @@ export function resolveCircleAabb(p: Vec2, r: number, b: Aabb): Vec2 | null {
 /** Simple uniform grid broadphase so collision cost does not grow with museum size. */
 export class CollisionWorld {
   private readonly cells = new Map<string, Aabb[]>();
+  /** Temporary blockers (training barriers). Few boxes, so they are checked every query. */
+  private extra: readonly Aabb[] = [];
 
   constructor(
     readonly boxes: readonly Aabb[],
@@ -63,8 +65,12 @@ export class CollisionWorld {
     }
   }
 
+  setExtra(boxes: readonly Aabb[]): void {
+    this.extra = boxes;
+  }
+
   private nearby(p: Vec2, r: number): Set<Aabb> {
-    const out = new Set<Aabb>();
+    const out = new Set<Aabb>(this.extra);
     const s = this.cellSize;
     for (let gx = Math.floor((p.x - r) / s); gx <= Math.floor((p.x + r) / s); gx++) {
       for (let gz = Math.floor((p.z - r) / s); gz <= Math.floor((p.z + r) / s); gz++) {

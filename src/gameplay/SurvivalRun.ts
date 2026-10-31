@@ -2,6 +2,7 @@ import type { NavGrid } from '../ai/NavGrid';
 import { ABILITIES, type AbilityKind } from '../data/abilities';
 import { PLAYER_CONFIG } from '../data/config';
 import { GUARD, GUARD_SCHEDULE, MAX_GUARDS } from '../data/gameplay';
+import { TRAINING } from '../data/training';
 import { GuardBrain } from '../enemies/GuardBrain';
 import type { CollisionWorld } from '../physics/Collision';
 import { clamp, lerp, type Vec2 } from '../utils/math';
@@ -20,6 +21,14 @@ export type RunEvent =
   | { type: 'blocked'; pos: Vec2; guard: number }
   | { type: 'dead' };
 
+/** Training practice dummy: never moves on its own or hurts the hero; abilities knock it around. */
+export interface Dummy {
+  pos: Vec2;
+  home: Vec2;
+  /** Seconds left knocked over. */
+  stun: number;
+}
+
 /**
  * One survival run, engine-free: guards, hearts, pickups, score and time.
  * The scene feeds it the hero position each step and renders whatever it reports.
@@ -33,6 +42,9 @@ export class SurvivalRun {
   over = false;
   /** Test/debug switch: no guards, no damage (used by the movement smoke tests). */
   peaceful = false;
+  /** Training mode: no guards, no coins, short cooldown, practice dummies. */
+  training = false;
+  dummies: Dummy[] = [];
   private events: RunEvent[] = [];
 
   constructor(
@@ -46,12 +58,15 @@ export class SurvivalRun {
   }
 
   /** Clean state for a new run (replay never inherits anything from the last one). */
-  reset(player: Vec2, ability: AbilityKind = this.ability.kind): void {
+  reset(player: Vec2, ability: AbilityKind = this.ability.kind, training = false): void {
+    this.training = training;
     this.health = new Health();
-    this.ability = new Ability(ability);
+    this.ability = new Ability(ability, training ? TRAINING.abilityCooldown : undefined);
+    this.dummies = training ? TRAINING.dummies.map((d) => ({ pos: { ...d }, home: { ...d }, stun: 0 })) : [];
     this.score = new ScoreKeeper();
     this.score.onBonus = (points) => this.events.push({ type: 'bonus', points });
     this.pickups.reset(player);
+    if (training) for (const it of this.pickups.items) it.active = false;
     this.guards.length = 0;
     this.over = false;
     this.events = [];
@@ -116,6 +131,17 @@ export class SurvivalRun {
         g.stun(w.stun);
         affected++;
       }
+      for (const dm of this.dummies) {
+        const dx = dm.pos.x - player.x;
+        const dz = dm.pos.z - player.z;
+        const d = Math.hypot(dx, dz);
+        if (d > w.radius) continue;
+        const dir = d > 1e-4 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
+        const push = w.push * (1 - (d / w.radius) * 0.5);
+        dm.pos = this.world.move(dm.pos, { x: dir.x * push, z: dir.z * push }, TRAINING.dummyRadius);
+        dm.stun = TRAINING.dummyStun;
+        affected++;
+      }
     } else if (this.ability.kind === 'dash') {
       this.health.grantInvuln(ABILITIES.dash.invulnerable);
     }
@@ -128,9 +154,15 @@ export class SurvivalRun {
     const pending = this.events.filter((e) => e.type === 'ability');
     this.events = pending;
     if (this.over) return this.events;
-    this.score.update(dt);
+    // Training never scores (no survival bonus to farm).
+    if (!this.training) this.score.update(dt);
     this.health.update(dt);
     this.ability.update(dt);
+
+    if (this.training) {
+      this.updateDummies(dt, player);
+      return this.events;
+    }
 
     for (const got of this.pickups.update(dt, player, this.health.hearts < this.health.max)) {
       if (got.kind === 'heart') {
@@ -146,6 +178,34 @@ export class SurvivalRun {
       this.updateGuards(dt, player);
     }
     return this.events;
+  }
+
+  private updateDummies(dt: number, player: Vec2): void {
+    const reach = PLAYER_CONFIG.radius + TRAINING.dummyRadius + GUARD.contactPadding;
+    this.dummies.forEach((dm, i) => {
+      if (dm.stun > 0) {
+        dm.stun = Math.max(0, dm.stun - dt);
+      } else {
+        // Wobble back to its spot so the next practice shot has a target.
+        const dx = dm.home.x - dm.pos.x;
+        const dz = dm.home.z - dm.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d > 0.02) {
+          const s = Math.min(d, TRAINING.dummyReturnSpeed * dt);
+          dm.pos = this.world.move(dm.pos, { x: (dx / d) * s, z: (dz / d) * s }, TRAINING.dummyRadius);
+        }
+      }
+      const px = player.x - dm.pos.x;
+      const pz = player.z - dm.pos.z;
+      const pd = Math.hypot(px, pz);
+      if (pd > reach || !this.shielded) return;
+      // Bumping a dummy with the shield up shows exactly what a real block does.
+      const dir = pd > 1e-4 ? { x: px / pd, z: pz / pd } : { x: 0, z: 1 };
+      this.ability.end();
+      dm.pos = this.world.move(dm.pos, { x: -dir.x * 1.2, z: -dir.z * 1.2 }, TRAINING.dummyRadius);
+      dm.stun = TRAINING.dummyStun;
+      this.events.push({ type: 'blocked', pos: { ...player }, guard: -1 - i });
+    });
   }
 
   private spawnDue(player: Vec2): void {

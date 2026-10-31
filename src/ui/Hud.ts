@@ -80,6 +80,9 @@ export class Hud {
           <button class="icon-btn" data-act="pause" aria-label="Pause">❚❚</button>
         </div>
       </div>
+      <div class="train-tag" hidden>🎯 TRAINING <span class="tt-hero"></span>
+        <small>Walang guards o coins. Practice lang!</small>
+        <button class="btn" data-act="lobby">Exit ✕</button></div>
       <button class="drop-prompt" data-act="drop" hidden>
         <span class="dp-big">TAP TO DROP</span>
         <span class="dp-small"><span class="hint-desktop">Click / Space / WASD</span><span class="hint-touch">Tap kahit saan</span> para bumaba ⬇</span>
@@ -152,9 +155,12 @@ export class Hud {
     this.fps.hidden = !this.fps.hidden;
   }
 
-  /** 'off' = lobby, 'intro' = cinematic (stats hidden), 'play' = full HUD. */
-  setMode(mode: 'off' | 'intro' | 'play'): void {
+  /** 'off' = lobby, 'intro' = cinematic (stats hidden), 'play' = full HUD, 'training' = practice HUD. */
+  setMode(mode: 'off' | 'intro' | 'play' | 'training', trainingHero = ''): void {
     this.root.dataset.mode = mode;
+    const tag = $(this.root, '.train-tag');
+    tag.hidden = mode !== 'training';
+    $(tag, '.tt-hero').textContent = trainingHero ? `· ${trainingHero}` : '';
     if (mode !== 'intro') this.showDrop(false);
   }
 
@@ -217,7 +223,9 @@ export class Hud {
     b.style.setProperty('--cd', String(frac));
     b.classList.toggle('ready', frac >= 1);
     b.classList.toggle('active', active);
-    b.dataset.left = frac >= 1 ? '' : String(Math.ceil(secondsLeft));
+    const s = Math.ceil(secondsLeft);
+    b.dataset.left = frac >= 1 ? '' : s >= 60 ? formatTime(s) : String(s);
+    b.classList.toggle('long', frac < 1 && s >= 60);
   }
 
   /** Little shake when the button is pressed on cooldown. */

@@ -32,4 +32,4 @@ Playwright (preinstalled `playwright` package) for browser smoke tests. No UI fr
 
 ## Current milestone
 M1 Foundation ✅ · M2 Core survival ✅ · M3 Lobby + cinematic intro ✅ · M4 Abilities, shop, missions ✅ (awaiting user feedback). Next: M5 enemies & difficulty.
-Gameplay rules live in engine-free `gameplay/SurvivalRun.ts`; `?peaceful` disables guards, `?play` skips lobby + intro (both used by e2e checks). FSM: lobby → intro (`gameplay/IntroSequence.ts`) → playing. Abilities: `gameplay/Ability.ts` + `SurvivalRun.useAbility`; missions: `gameplay/Missions.ts`; skins are colour remaps (`data/skins.ts`, `Kit.c`).
+Gameplay rules live in engine-free `gameplay/SurvivalRun.ts`; `?peaceful` disables guards, `?play` skips lobby + intro (both used by e2e checks). FSM: lobby → intro (`gameplay/IntroSequence.ts`) → playing. Abilities: `gameplay/Ability.ts` + `SurvivalRun.useAbility`; missions: `gameplay/Missions.ts`; skins are colour remaps (`data/skins.ts`, `Kit.c`). Training mode = `SurvivalRun.reset(..., training=true)` + `data/training.ts` (Hall of Heroes, rope barriers via `CollisionWorld.setExtra`).

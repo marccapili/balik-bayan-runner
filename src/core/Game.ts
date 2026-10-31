@@ -35,6 +35,8 @@ export class Game {
   /** Set by the TAP TO DROP button; consumed by the intro. */
   private dropRequested = false;
   private switching = false;
+  /** Set while in training: the hero being tried (may be locked). */
+  private trainingHero: HeroId | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -63,7 +65,7 @@ export class Game {
   }
 
   get heroId(): HeroId {
-    return this.save.data.selectedHero;
+    return this.trainingHero ?? this.save.data.selectedHero;
   }
 
   /** Boot: build both scenes, then open on the lobby. */
@@ -93,6 +95,7 @@ export class Game {
     });
     this.lobby = new Lobby(this.uiRoot, this.save, {
       onPlay: () => void this.play(),
+      onTrain: (id) => void this.train(id),
       onPreview: (id, skin) => this.lobbyScene?.setHero(id, skin ?? this.save.skinOf(id)),
       onPurchase: (kind) => this.sfx.play(kind === 'claim' ? 'claim' : 'unlock'),
       onUnlock: (id) => {
@@ -115,7 +118,10 @@ export class Game {
     });
     this.transition = new Transition(this.uiRoot);
     this.applySettings();
-    this.museum.onRoomChange = (r) => this.hud?.showRoom(`📍 ${r.sign}`, r.subtitle);
+    this.museum.onRoomChange = (r) => {
+      // Training stays in one hall and has its own tag; skip the gallery banner there.
+      if (!this.trainingHero) this.hud?.showRoom(`📍 ${r.sign}`, r.subtitle);
+    };
     this.museum.onEvent = (e) => this.onRunEvent(e);
     const q = new URLSearchParams(location.search);
     if (q.has('peaceful')) this.museum.run.peaceful = true;
@@ -168,6 +174,32 @@ export class Game {
     this.switching = false;
   }
 
+  /** Training: lobby → portal wipe → Hall of Heroes with the previewed hero (owned or not). */
+  async train(id: HeroId): Promise<void> {
+    if (this.switching || this.fsm.state !== 'lobby' || !this.museum) return;
+    this.switching = true;
+    this.sfx.play('portal');
+    this.lobby?.playOut();
+    await this.transition?.cover();
+    this.trainingHero = id;
+    this.showMuseum();
+    this.beginTraining();
+    await this.transition?.reveal();
+    this.switching = false;
+  }
+
+  private beginTraining(): void {
+    if (!this.museum || !this.trainingHero) return;
+    this.input.releaseAll();
+    this.hud?.hideResults();
+    this.hud?.setPaused(false);
+    this.museum.startTraining();
+    if (this.fsm.state === 'lobby') this.fsm.transition('intro');
+    if (this.fsm.state === 'intro' || this.fsm.state === 'paused') this.fsm.transition('playing');
+    this.hud?.setMode('training', HEROES[this.trainingHero].name);
+    this.pushStats();
+  }
+
   private beginIntro(): void {
     if (!this.museum || !this.fsm.transition('intro')) return;
     this.input.releaseAll();
@@ -201,6 +233,7 @@ export class Game {
     this.defeatLeft = 0;
     this.hud?.hideResults();
     this.hud?.setPaused(false);
+    this.trainingHero = null;
     this.museum?.resetRun();
     this.showLobby();
     await this.transition?.reveal();
@@ -282,6 +315,10 @@ export class Game {
   /** New run from scratch (pause-menu restart and results replay): straight back into the cinematic. */
   restart(): void {
     if (this.switching || !this.museum) return;
+    if (this.trainingHero) {
+      this.beginTraining();
+      return;
+    }
     if (this.fsm.state === 'playing') {
       // Dev/test path: restart without the intro while already running.
       this.museum.resetRun();
@@ -434,6 +471,8 @@ export class Game {
       skin: this.save.skinOf(this.heroId),
       coins: run?.pickups.items.filter((i) => i.active).map((i) => ({ kind: i.kind, x: i.pos.x, z: i.pos.z })),
       results: this.hud?.resultsVisible ?? false,
+      training: this.museum?.training ?? false,
+      dummies: this.museum?.run.dummies.map((d) => ({ x: d.pos.x, z: d.pos.z, stun: d.stun })),
       introPhase: this.museum?.introPhase ?? null,
       dropPrompt: this.hud?.dropVisible ?? false,
       lobbyPanel: this.lobby?.openPanelName ?? null,

@@ -8,6 +8,7 @@ import { HERO_ORDER, HEROES } from '../../src/data/heroes';
 import { MISSION_POOL, MISSIONS } from '../../src/data/missions';
 import { buildColliders, MUSEUM_BOUNDS } from '../../src/data/museumLayout';
 import { EXCHANGE, SKINS } from '../../src/data/skins';
+import { TRAINING } from '../../src/data/training';
 import { Ability } from '../../src/gameplay/Ability';
 import { applyRun, describe as describeMission, makeMission, type RunSummary } from '../../src/gameplay/Missions';
 import { SurvivalRun } from '../../src/gameplay/SurvivalRun';
@@ -234,5 +235,73 @@ describe('SaveManager v3: shop + missions', () => {
     expect(s.data.missions.map((m) => m.seq)).toEqual([MISSIONS.active, 1, 2]);
     expect(new SaveManager(store).data.missions[0]!.seq).toBe(MISSIONS.active); // persisted
     expect(s.claimMission(1)).toBeNull(); // not finished
+  });
+});
+
+describe('Training mode', () => {
+  const trainRun = (kind: (typeof HEROES)['rizal']['abilityKind']) => {
+    const run = new SurvivalRun(nav, sight, world, spots, seeded(2));
+    run.reset(TRAINING.spawn, kind, true);
+    return run;
+  };
+  const at = TRAINING.spawn;
+
+  it('has no guards, no coins, no damage and a short cooldown', () => {
+    const run = trainRun('sprint');
+    for (let t = 0; t < 60; t += 1 / 30) run.update(1 / 30, at);
+    expect(run.guards).toHaveLength(0);
+    expect(run.pickups.items.every((p) => !p.active)).toBe(true);
+    expect(run.score.score).toBe(0);
+    expect(run.health.hearts).toBe(3);
+    expect(run.useAbility(at, { x: 0, z: 1 })).toBe(true);
+    for (let t = 0; t < TRAINING.abilityCooldown + 0.1; t += 1 / 30) run.update(1 / 30, at);
+    expect(run.useAbility(at, { x: 0, z: 1 })).toBe(true);
+  });
+
+  it('a normal run after training is back to normal', () => {
+    const run = trainRun('sprint');
+    run.reset({ x: 0, z: 0 }, 'sprint');
+    run.update(1 / 30, { x: 0, z: 0 });
+    expect(run.training).toBe(false);
+    expect(run.guards.length).toBe(1);
+    expect(run.ability.cooldown).toBe(ABILITIES.sprint.cooldown);
+  });
+
+  it('shockwave knocks dummies over, then they return to their spot', () => {
+    const run = trainRun('shockwave');
+    const d = run.dummies[0]!;
+    const near = { x: d.home.x + 2, z: d.home.z };
+    run.useAbility(near, { x: 0, z: 1 });
+    expect(d.stun).toBeGreaterThan(0);
+    expect(Math.hypot(d.pos.x - d.home.x, d.pos.z - d.home.z)).toBeGreaterThan(1);
+    for (let t = 0; t < 8; t += 1 / 30) run.update(1 / 30, at);
+    expect(Math.hypot(d.pos.x - d.home.x, d.pos.z - d.home.z)).toBeLessThan(0.1);
+  });
+
+  it('bumping a dummy with the shield up shows a block', () => {
+    const run = trainRun('shield');
+    run.useAbility(at, { x: 0, z: 1 });
+    const d = run.dummies[0]!;
+    const ev = run.update(1 / 30, { x: d.pos.x + 0.3, z: d.pos.z });
+    expect(ev.some((e) => e.type === 'blocked')).toBe(true);
+    expect(run.shielded).toBe(false);
+  });
+
+  it('rope barriers close the Hall of Heroes doorways while training', () => {
+    const w = new CollisionWorld(boxes);
+    w.setExtra(TRAINING.barriers);
+    const out = w.move({ x: 12, z: 13 }, { x: -6, z: 0 }, PLAYER_CONFIG.radius);
+    expect(out.x).toBeGreaterThan(10);
+    const south = w.move({ x: 20, z: 2 }, { x: 0, z: -6 }, PLAYER_CONFIG.radius);
+    expect(south.z).toBeGreaterThan(0);
+    w.setExtra([]);
+    expect(w.move({ x: 12, z: 13 }, { x: -6, z: 0 }, PLAYER_CONFIG.radius).x).toBeLessThan(8);
+  });
+
+  it('cooldowns follow the owner-set order (Rizal 1:30 > Bonifacio > Lapu-Lapu 1:00 > Gabriela)', () => {
+    expect(ABILITIES.sprint.cooldown).toBe(90);
+    expect(ABILITIES.shield.cooldown).toBe(60);
+    expect(ABILITIES.shockwave.cooldown).toBeGreaterThan(60);
+    expect(ABILITIES.dash.cooldown).toBeLessThan(60);
   });
 });

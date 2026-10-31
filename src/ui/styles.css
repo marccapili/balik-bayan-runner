@@ -1484,3 +1484,98 @@ body.touch .ab-key {
     font-size: 12px;
   }
 }
+
+/* ── Training (M4 follow-up) ── */
+.ability-btn.long::after {
+  font-size: 22px;
+}
+.hud[data-mode='training'] .hearts,
+.hud[data-mode='training'] .score-line,
+.hud[data-mode='training'] .timer,
+.hud[data-mode='training'] .coin-chip {
+  visibility: hidden;
+}
+.train-tag {
+  position: absolute;
+  top: calc(10px + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  max-width: calc(100vw - 150px);
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 2px solid rgba(127, 216, 255, 0.6);
+  font: 800 15px var(--font-display);
+  color: #9fe2ff;
+  text-align: center;
+}
+.train-tag[hidden] {
+  display: none;
+}
+.train-tag small {
+  flex-basis: 100%;
+  font: 400 11px var(--font-body);
+  color: var(--cream);
+  opacity: 0.8;
+}
+.train-tag .btn {
+  width: auto;
+  margin: 0;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.lb-bottom .train-btn {
+  pointer-events: auto;
+  align-self: stretch;
+  min-width: 96px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  border: 2px solid rgba(127, 216, 255, 0.65);
+  background: var(--panel);
+  color: #9fe2ff;
+  font: 800 15px/1.1 var(--font-display);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.lb-bottom .train-btn small {
+  font: 400 11px var(--font-body);
+  color: var(--cream);
+  opacity: 0.8;
+}
+.lb-actions {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+@media (max-width: 560px) {
+  .lb-actions .play-btn {
+    flex: 1;
+  }
+}
+.lobby.leaving .lb-actions {
+  pointer-events: none;
+}
+@media (max-width: 560px) {
+  .train-tag {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    font-size: 13px;
+    padding: 6px 8px 6px 12px;
+    max-width: calc(100vw - 110px);
+    left: calc(12px + var(--safe-left));
+    transform: none;
+  }
+  .train-tag small,
+  .train-tag .tt-hero {
+    display: none;
+  }
+}

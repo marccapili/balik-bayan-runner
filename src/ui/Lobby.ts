@@ -9,6 +9,8 @@ import { formatTime } from '../utils/format';
 export interface LobbyCallbacks {
   /** Start a run with the currently selected (owned) hero. */
   onPlay(): void;
+  /** Practice room with this hero (owned or not): no guards, no coins, short cooldown. */
+  onTrain(id: HeroId): void;
   /** Show this hero on the stage (owned or not), optionally in a specific skin (shop try-on). */
   onPreview(id: HeroId, skin?: string): void;
   onUnlock(id: HeroId): UnlockResult;
@@ -79,7 +81,10 @@ export class Lobby {
           <div class="hc-title"></div>
           <div class="hc-ability"><span class="hc-ab-icon"></span> <b class="hc-ab-name"></b> <span class="hc-ab-text"></span></div>
         </div>
-        <button class="play-btn" data-act="play"><span class="pb-label">PLAY</span><small class="pb-sub">Tara, takbo!</small></button>
+        <div class="lb-actions">
+          <button class="train-btn" data-act="train"><span>🎯 Training</span><small>Try muna, libre!</small></button>
+          <button class="play-btn" data-act="play"><span class="pb-label">PLAY</span><small class="pb-sub">Tara, takbo!</small></button>
+        </div>
       </footer>
       <div class="lb-toast" aria-live="polite"></div>
       <div class="sheet overlay" hidden>
@@ -136,6 +141,9 @@ export class Lobby {
       case 'play':
         if (this.save.data.ownedHeroes.includes(this.preview)) this.cb.onPlay();
         else this.tryUnlock(this.preview);
+        break;
+      case 'train':
+        this.cb.onTrain(this.preview);
         break;
       case 'prev':
       case 'next':

@@ -18,6 +18,8 @@ import { Portal } from '../world/Portal';
 import { ABILITIES } from '../data/abilities';
 import { HEROES, type HeroId } from '../data/heroes';
 import { AbilityViews } from '../world/AbilityViews';
+import { TrainingProps } from '../world/TrainingProps';
+import { TRAINING } from '../data/training';
 import { buildColliders, MUSEUM_BOUNDS, roomAt, SPAWN_POINT, type Room } from '../data/museumLayout';
 import { GuardView, sightRingMaterial } from '../enemies/GuardView';
 import { SurvivalRun, type RunEvent } from '../gameplay/SurvivalRun';
@@ -44,6 +46,7 @@ export class MuseumScene implements GameScene {
   private blinkT = 0;
   private readonly portal: Portal;
   private readonly abilityViews: AbilityViews;
+  private readonly trainingProps: TrainingProps;
   private intro: IntroSequence | null = null;
   private introGuard: GuardBrain | null = null;
   /** Accessibility: no camera shake, fewer particles. */
@@ -101,20 +104,25 @@ export class MuseumScene implements GameScene {
     }
     this.portal = new Portal(scene, this.fx.sparkTex);
     this.abilityViews = new AbilityViews(scene, this.fx.sparkTex);
+    this.trainingProps = new TrainingProps(scene);
     this.resetRun();
   }
 
-  /** Fresh run: hero at spawn, new board, no guards. */
-  resetRun(): void {
+  /** Fresh run: hero at spawn, new board, no guards. `training` = Hall of Heroes practice instead. */
+  resetRun(training = false): void {
+    const spawn = training ? TRAINING.spawn : SPAWN_POINT;
     this.intro = null;
     this.introGuard = null;
     this.portal.hide();
-    this.player.respawn(SPAWN_POINT);
-    this.run.reset(SPAWN_POINT, HEROES[this.player.heroId].abilityKind);
+    this.world.setExtra(training ? TRAINING.barriers : []);
+    this.trainingProps.setEnabled(training);
+    this.player.respawn(spawn);
+    this.run.reset(spawn, HEROES[this.player.heroId].abilityKind, training);
+    this.trainingProps.sync(this.run.dummies, 0);
     this.abilityViews.hide();
     this.cam.zoom = 1;
     this.cam.lookY = 0.6;
-    this.cam.snapTo(SPAWN_POINT);
+    this.cam.snapTo(spawn);
     for (const v of this.guardViews) v.hide();
     this.pickupViews.sync(this.run.pickups.items, 0);
     this.room = undefined;
@@ -127,6 +135,17 @@ export class MuseumScene implements GameScene {
   /** Ability button / Space. Returns whether it fired (false while on cooldown). */
   useAbility(): boolean {
     return this.run.useAbility(this.player.position, this.player.motor.facing);
+  }
+
+  /** Training: straight into the Hall of Heroes with practice dummies (no intro, guards or coins). */
+  startTraining(): void {
+    this.resetRun(true);
+    this.fx.reduced = this.reducedEffects;
+    this.abilityViews.reduced = this.reducedEffects;
+  }
+
+  get training(): boolean {
+    return this.run.training;
   }
 
   /** New run that starts with the cinematic: hover under the portal, wait for the drop. */
@@ -232,6 +251,7 @@ export class MuseumScene implements GameScene {
   private syncWorld(dt: number): void {
     this.run.guards.forEach((g, i) => this.guardViews[i]?.sync(g, dt));
     this.pickupViews.sync(this.run.pickups.items, dt);
+    if (this.run.training) this.trainingProps.sync(this.run.dummies, dt);
     const aspect = this.engine.getRenderWidth() / Math.max(1, this.engine.getRenderHeight());
     this.cam.update(this.player.position, this.player.velocity, dt, aspect);
     for (const s of this.museum.spinners) s.rotation.z += dt * 0.6;
@@ -281,6 +301,7 @@ export class MuseumScene implements GameScene {
   dispose(): void {
     this.player.dispose();
     this.portal.dispose();
+    this.trainingProps.dispose();
     this.abilityViews.dispose();
     for (const v of this.guardViews) v.dispose();
     this.fx.dispose();

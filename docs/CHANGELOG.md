@@ -1,5 +1,10 @@
 # Development changelog
 
+## M4 follow-up — 2026-10-31 (owner feedback)
+- Cooldowns: Rizal sprint 1:30, Lapu-Lapu shield 1:00 (owner-set); Bonifacio shockwave 1:15, Gabriela dash 0:45 to balance. Long cooldowns show as m:ss on the ability button.
+- Training mode: "🎯 Training" button in the lobby tries the previewed hero (locked heroes too, nothing is bought). Runs in the Hall of Heroes with the doorways roped off; no guards, no coins, no score, no missions/leaderboard. Three straw practice dummies react to Bonifacio's shockwave and Lapu-Lapu's shield; ability cooldown is 3 s while training. Exit via the tag button or pause → lobby.
+- Tests: 83 unit, 88 browser checks.
+
 ## M4 Hero abilities, shop & missions — 2026-10-31 (awaiting feedback)
 - Abilities (Space on desktop, round ability button on phones, cooldown ring + seconds left; tuning in `src/data/abilities.ts`):
   - Rizal, Mabilis na Isip: sprint ×1.55 top speed for 3.5 s, 12 s cooldown.

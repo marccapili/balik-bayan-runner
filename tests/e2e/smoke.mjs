@@ -424,6 +424,42 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     await ctx.close();
   }
 
+
+  // Training: try a locked hero in the Hall of Heroes.
+  {
+    const ctx = await browser.newContext(desk);
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
+    await page.click('.lobby [data-act="next"]');
+    await page.click('.lobby [data-act="train"]');
+    const tr = await pollUntil(page, (s) => s.state === 'playing' && s.training, 15000);
+    check('Training starts with a locked hero (no purchase)', tr.training && tr.hero === 'lapulapu' && !tr.save.ownedHeroes.includes('lapulapu'));
+    await wait(1500);
+    const quiet = await snap(page);
+    check('Training has no guards and no coins', quiet.guards.length === 0 && quiet.coins.length === 0 && quiet.dummies.length === 3 && quiet.score === 0);
+    check('Training HUD shows the training tag', await page.isVisible('.train-tag'));
+    await page.keyboard.press('Space');
+    const sh = await pollUntil(page, (s) => s.shielded, 3000);
+    await page.screenshot({ path: `${OUT}/m4-training.png` });
+    const again = await pollUntil(page, (s) => s.ability.ready, 8000);
+    check('Training uses a short practice cooldown', sh.shielded && again.ability.ready && again.ability.uses === 1);
+    // The doorway south of the hall is roped off.
+    const wall = await holdUntil(page, ['KeyS'], (s) => s.z < -0.5, 5000);
+    check('Training room is closed off (rope barrier)', wall.z > 0, `z=${wall.z?.toFixed(2)}`);
+    await page.click('.train-tag [data-act="lobby"]');
+    const back = await pollUntil(page, (s) => s.state === 'lobby', 10000);
+    check('Training Exit returns to the lobby, nothing unlocked', back.state === 'lobby' && !back.training && back.hero === 'rizal' && !back.save.ownedHeroes.includes('lapulapu'));
+    await page.click('.lobby [data-act="play"]');
+    const run = await pollUntil(page, (s) => s.state === 'intro', 15000);
+    check('normal PLAY after training is a real run again', run.state === 'intro' && !run.training && run.hero === 'rizal');
+    check('no console errors (training)', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await ctx.close();
+  }
+
   // Shop + missions in the lobby.
   {
     const ctx = await browser.newContext(desk);
