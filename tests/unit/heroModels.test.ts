@@ -58,7 +58,7 @@ function tinyGlb(): ArrayBuffer {
 
 const load = (id: 'bonifacio' | 'rizal') => {
   const b = readFileSync(`public/models/${id}.glb`);
-  return parseGlb(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+  return parseGlb(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer);
 };
 
 describe('GLB hero models', () => {
