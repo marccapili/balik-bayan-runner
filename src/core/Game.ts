@@ -1,3 +1,4 @@
+import { preloadHeroModels } from '../characters/HeroGlb';
 import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
 import { MUSIC } from '../data/audio';
 import { TIPS, TIP_LOCKED_SUFFIX } from '../data/tutorial';
@@ -100,6 +101,8 @@ export class Game {
 
   /** Boot: build both scenes, then open on the lobby. */
   async start(onProgress: (p: number, label: string) => void): Promise<void> {
+    onProgress(0.08, 'Kinukuha ang mga bayani…');
+    await preloadHeroModels();
     onProgress(0.15, 'Binubuksan ang museo…');
     await nextFrame();
     this.museum = new MuseumScene(this.engine, this.input, this.heroId);

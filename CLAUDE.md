@@ -22,7 +22,7 @@ Playwright (preinstalled `playwright` package) for browser smoke tests. No UI fr
 - The museum is data (`data/museumLayout.ts`): rendering, collision, camera occlusion and future A* all read it.
 - Every update takes `dt` seconds (clamped to 1/20 in `Game.frame`); use `damp()` for smoothing — never `lerp(a,b,constant)` per frame.
 - Materials go through `world/materials.ts#mat` (cached, frozen). Pass `{dynamic:true}` if mesh visibility animates.
-- Heroes are procedural rigs (`characters/HeroModel.ts`) animated by `animations/HeroAnimator.ts`. Swap to GLB later by producing the same `HeroRig` shape.
+- Heroes are rigs (`characters/HeroModel.ts`) animated by `animations/HeroAnimator.ts`. Bonifacio + Rizal use owner GLBs (`public/models`, `data/heroModels.ts`), read by `characters/glb.ts` and auto-skinned onto the same `HeroRig` (`characters/autoSkin.ts`, `HeroGlb.ts`); others stay procedural. Workflow in `docs/ASSETS.md`.
 
 ## Quality rules
 - Every visible button must work. No fake UI.

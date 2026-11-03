@@ -172,5 +172,13 @@ export class HeroAnimator {
         this.setState('idle');
       }
     }
+    const lim = r.armLimit;
+    if (lim !== undefined) {
+      // Skinned sculpts stretch at the shoulder on big poses (wave, fall, topple), so tone them down.
+      for (const a of [r.armL, r.armR]) {
+        a.rotation.x = clamp(a.rotation.x, -lim, lim);
+        a.rotation.z = clamp(a.rotation.z, -lim, lim);
+      }
+    }
   }
 }

@@ -1,5 +1,12 @@
 # Development changelog
 
+## Sculpted 3D heroes: Bonifacio + Rizal — 2026-11-03 (owner models)
+- The owner's image-to-3D models replace the procedural Bonifacio and Rizal (classic look) in the lobby, Shop preview, intro and museum. Lapu-Lapu and Gabriela keep the procedural model until their GLBs arrive.
+- Models arrive unrigged, so `characters/autoSkin.ts` skins them onto the same 8-joint chibi rig: each vertex gets a body part from per-hero landmarks (`data/heroModels.ts`), then weights are blended along the mesh's own edges so joints bend smoothly. `HeroAnimator` drives them unchanged (idle, run, wave, fall, hurt, topple); arm swing is capped per model (`armLimit`) so shoulders don't stretch.
+- Small engine-free GLB reader (`characters/glb.ts`) instead of the full Babylon loader. Models load at boot; if one fails the hero quietly keeps the procedural look.
+- Textures re-encoded to WebP with `tools/optimize_glb.py` (3.1 MB → 0.9 MB for both). Non-classic skins still use the procedural model until skin GLBs exist.
+- Tests: 156 unit (GLB parsing, auto-skin), browser check that both heroes load their models.
+
 ## Phase 7 polish (part 1) — 2026-10-31 (awaiting feedback)
 - Music: two original procedural loops (`audio/Music.ts`, data `data/audio.ts`), inspired by kulintang gong music on a pentatonic scale (not transcriptions). Calm lobby loop; museum chase loop whose bass/shaker/lead layers fade in as more enemies join, a bit faster in Endless. Music ducks while paused, reading or playing a mini-game, and stops on game over. Scheduled on the audio clock, so it doesn't depend on frame rate.
 - Settings: separate Music and SFX volume sliders, master mute, Graphics quality (Auto / Low / High), Show FPS, Reduced effects, Large text, and "show tutorial tips again". Saved in the existing v5 save (old saves get defaults; volumes are clamped).

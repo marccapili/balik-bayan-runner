@@ -1,3 +1,4 @@
+import { buildGlbHero, hasHeroModel } from './HeroGlb';
 import type { Material } from '@babylonjs/core/Materials/material';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
@@ -35,6 +36,8 @@ export interface HeroRig {
   /** Things that trail behind when running (headband tails, long hair, coat tails, skirts). */
   flutter: TransformNode[];
   meshes: Mesh[];
+  /** Sculpted GLB skinned to this rig: max arm swing (radians) before the mesh stretches. */
+  armLimit?: number;
 }
 
 export const LEG_LEN = 0.34;
@@ -128,6 +131,8 @@ export class Kit {
 
 export function buildHero(scene: Scene, id: HeroId, skin?: string): HeroRig {
   const def = skin ? SKIN_BY_ID[skin] : undefined;
+  // Sculpted GLB model for the classic look when one is loaded (see data/heroModels.ts).
+  if ((!def || def.hero !== id || def.id === `${id}.classic`) && hasHeroModel(id)) return buildGlbHero(scene, id);
   const k = new Kit(scene, id, def && def.hero === id ? def.remap : {});
   const L = LOOKS[id];
   const p = buildSkeleton(k, faceMaterial(scene, id, { skin: L.skin, ...L.face }), L.skin);

@@ -268,6 +268,18 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     return s;
   };
   check('game opens on the lobby', (await snap(page)).state === 'lobby');
+  const glb = await page.evaluate(() => {
+    const l = window.__bbr.lobbyScene;
+    const boni = l.rig.meshes.map((m) => m.name);
+    l.setHero('rizal');
+    const rizal = l.rig.meshes.map((m) => m.name);
+    l.setHero('lapulapu');
+    const lapu = l.rig.meshes.length;
+    l.setHero(window.__bbr.heroId);
+    return { boni, rizal, lapu };
+  });
+  check('Bonifacio + Rizal use the sculpted 3D models', glb.boni.join() === 'bonifacio_glb' && glb.rizal.join() === 'rizal_glb', JSON.stringify(glb));
+  check('heroes without a model keep the procedural look', glb.lapu > 20, `lapu-lapu meshes ${glb.lapu}`);
   await page.screenshot({ path: `${OUT}/m3-lobby.png` });
 
   for (const panel of ['leaderboard', 'settings', 'profile', 'missions', 'daily', 'archive']) {
