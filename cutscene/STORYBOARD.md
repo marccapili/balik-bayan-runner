@@ -14,12 +14,17 @@ node render.mjs --frames --workers=4 --soft-gl                    # all frames �
 node render.mjs --encode --out=out/intro.mp4
 ```
 
-Then encode the two web versions into `../public/lore/` (1280×720, no audio: the game plays the sound):
+Then make the soundtrack (original score, SFX and chibi voice blips, all synthesized; needs only numpy) and encode
+the two web versions into `../public/lore/` (1280×720, with that sound):
 
 ```
-ffmpeg -i out/intro.mp4 -vf scale=1280:720 -c:v libvpx-vp9 -b:v 0 -crf 40 -row-mt 1 -an ../public/lore/intro.webm
-ffmpeg -i out/intro.mp4 -vf scale=1280:720 -c:v libx264 -crf 26 -preset slow -pix_fmt yuv420p -movflags +faststart -an ../public/lore/intro.mp4
+python3 sound/score.py out/intro.wav
+ffmpeg -i out/intro.mp4 -i out/intro.wav -map 0:v -map 1:a -vf scale=1280:720 -c:v libvpx-vp9 -b:v 0 -crf 40 -row-mt 1 -c:a libopus -b:a 96k -shortest ../public/lore/intro.webm
+ffmpeg -i out/intro.mp4 -i out/intro.wav -map 0:v -map 1:a -vf scale=1280:720 -c:v libx264 -crf 26 -preset slow -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -movflags +faststart ../public/lore/intro.mp4
 ```
+
+Sound times live in `sound/score.py` (`compose()` = music per scene, `effects()` = SFX, `voices()` reads `lines.js`).
+If a shot's timing changes, move its sounds there too.
 
 Watercolour `fill` is off for this film (`bayani.js` turns fills into flat washes): it costs seconds per call without a GPU.
 

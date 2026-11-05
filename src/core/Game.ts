@@ -1,7 +1,7 @@
 import { preloadHeroModels } from '../characters/HeroGlb';
 import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
 import { MUSIC } from '../data/audio';
-import { LORE, LORE_VIDEO, type LoreSfx } from '../data/lore';
+import { LORE, LORE_VIDEO } from '../data/lore';
 import { LoreTimeline, type LoreEvent } from '../gameplay/LoreTimeline';
 import type { LorePlayer } from '../ui/LorePlayer';
 import { TIPS, TIP_LOCKED_SUFFIX } from '../data/tutorial';
@@ -36,21 +36,6 @@ import { GAME_TRANSITIONS, StateMachine, type GameState } from './StateMachine';
 /** Sound played when each kind of enemy joins the run. */
 const JOIN_SOUND: Record<EnemyKind, SfxName> = { guard: 'alert', dog: 'bark', multo: 'whoo', tikbalang: 'neigh' };
 const MINI_SOUND: Record<MiniSound, SfxName> = { click: 'click', good: 'coin', bad: 'denied', win: 'unlock' };
-const LORE_SOUND: Record<LoreSfx, SfxName> = {
-  crack: 'crack',
-  whoosh: 'whoosh',
-  sip: 'sip',
-  flash: 'flash',
-  land: 'land',
-  coins: 'rare',
-  alert: 'alert',
-  bark: 'bark',
-  whoo: 'whoo',
-  neigh: 'neigh',
-  page: 'page',
-  run: 'dash',
-  logo: 'logo',
-};
 /** The cutscene overlay lives in its own chunk; started during loading so it is ready on the first tap. */
 const loadLore = (): Promise<typeof import('../ui/LorePlayer')> => import('../ui/LorePlayer');
 
@@ -249,7 +234,10 @@ export class Game {
 
   private makeLorePlayer(P: typeof LorePlayer): LorePlayer {
     const sources = LORE_VIDEO.map((v) => ({ src: import.meta.env.BASE_URL + v.src, type: v.type }));
-    return new P(this.uiRoot, sources, () => this.skipLore());
+    const p = new P(this.uiRoot, sources, () => this.skipLore());
+    const s = this.save.data.settings;
+    p.setVolume(s.muted ? 0 : Math.max(s.musicVolume, s.sfxVolume));
+    return p;
   }
 
   /** Follows the video clock; if the video never gets going, gives up and skips. */
@@ -275,9 +263,7 @@ export class Game {
 
   private onLoreEvent(e: LoreEvent): void {
     this.lorePlayer?.onEvent(e);
-    if (e.type === 'sfx') this.sfx.play(LORE_SOUND[e.sfx]);
-    else if (e.type === 'bubble' && e.bubble) this.sfx.babble(LORE.voice[e.bubble.who], Math.min(8, Math.ceil(e.bubble.text.length / 4)));
-    else if (e.type === 'end') void this.finishLore();
+    if (e.type === 'end') void this.finishLore();
   }
 
   /** Lore over (or skipped): portal wipe into the lobby. */
@@ -315,6 +301,7 @@ export class Game {
     this.hud?.setFpsVisible(s.showFps);
     document.body.classList.toggle('large-text', s.largeText);
     this.sfx.setMuted(s.muted);
+    this.lorePlayer?.setVolume(s.muted ? 0 : Math.max(s.musicVolume, s.sfxVolume));
     this.hud?.setMuted(s.muted);
     if (this.museum) this.museum.reducedEffects = s.reducedEffects;
     document.body.classList.toggle('reduced-fx', s.reducedEffects);
@@ -538,7 +525,8 @@ export class Game {
   /** Picks the loop + intensity for the current state (cheap; Music only acts on changes). */
   private updateMusic(state: string): void {
     const run = this.museum?.run;
-    if (state === 'lore') return this.music.set('lore', LORE.intensity[this.lore?.timeline.scene.id ?? 'title'] ?? 0);
+    // The intro video carries its own score and sound effects.
+    if (state === 'lore') return this.music.set(null);
     if (state === 'boot' || state === 'lobby') return this.music.set('lobby');
     if (state === 'gameover' || !run) return this.music.set(null);
     const enemies = run.training ? 0 : run.guards.length;
@@ -976,7 +964,7 @@ export class Game {
       dropPrompt: this.hud?.dropVisible ?? false,
       lobbyPanel: this.lobby?.openPanelName ?? null,
       lore: this.lore
-        ? { time: this.lore.timeline.time, scene: this.lore.timeline.scene.id, video: this.lorePlayer?.time ?? 0, bubble: this.lore.timeline.currentBubble?.text ?? null, skip: this.lorePlayer?.skipVisible ?? false }
+        ? { time: this.lore.timeline.time, scene: this.lore.timeline.scene.id, video: this.lorePlayer?.time ?? 0, bubble: this.lore.timeline.currentBubble?.text ?? null, skip: this.lorePlayer?.skipVisible ?? false, sound: this.lorePlayer ? !this.lorePlayer.video.muted && this.lorePlayer.video.volume > 0 : false }
         : null,
       previewHero: this.lobby?.previewHero,
       save: { ...this.save.data },

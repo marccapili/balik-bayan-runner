@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_TRANSITIONS, StateMachine, type GameState } from '../../src/core/StateMachine';
-import { LORE, LORE_CUES, LORE_SCENES } from '../../src/data/lore';
+import { LORE, LORE_SCENES } from '../../src/data/lore';
 import { LoreTimeline, type LoreEvent } from '../../src/gameplay/LoreTimeline';
 import filmLines from '../../cutscene/src/scenes/lines.js?raw';
 
@@ -38,28 +38,22 @@ describe('lore data', () => {
     for (const s of LORE_SCENES) for (const b of s.bubbles) expect(b.until - b.at).toBeGreaterThanOrEqual(Math.min(2.4, b.text.length / 14 - 0.6));
   });
 
-  it('bubbles and cues sit inside their scenes, every bubble has a name and pitch', () => {
+  it('bubbles sit inside their scenes, every speaker has a name entry', () => {
     for (const s of LORE_SCENES) for (const bb of s.bubbles) {
       expect(bb.until).toBeGreaterThan(bb.at);
       expect(bb.until).toBeLessThanOrEqual(s.dur);
       expect(bb.text.length).toBeGreaterThan(0);
-      expect(LORE.voice[bb.who]).toBeDefined();
-    }
-    for (const c of LORE_CUES) {
-      const s = LORE_SCENES.find((x) => x.id === c.scene)!;
-      expect(s).toBeDefined();
-      expect(c.at).toBeLessThan(s.dur);
+      expect(LORE.names[bb.who]).toBeDefined();
     }
   });
 });
 
 describe('LoreTimeline', () => {
-  it('plays every scene in order, fires every cue once, then ends', () => {
+  it('plays every scene in order, then ends', () => {
     const tl = new LoreTimeline();
     const ev = play(tl, LORE.duration + 1);
     const scenes = ev.filter((e) => e.type === 'scene').map((e) => (e.type === 'scene' ? e.scene.id : ''));
     expect(scenes).toEqual(LORE_SCENES.map((s) => s.id));
-    expect(ev.filter((e) => e.type === 'sfx')).toHaveLength(LORE_CUES.length);
     const ends = ev.filter((e) => e.type === 'end');
     expect(ends).toEqual([{ type: 'end', skipped: false }]);
     expect(tl.done).toBe(true);
@@ -83,14 +77,13 @@ describe('LoreTimeline', () => {
     expect(tl.update(1 / 60)).toEqual([]);
   });
 
-  it('seek jumps without replaying passed sounds, then continues normally', () => {
+  it('seek jumps to a scene, then continues normally', () => {
     const tl = new LoreTimeline();
     const manila = LORE_SCENES.find((s) => s.id === 'manila')!;
-    const ev = tl.seek(manila.start + 5.86);
-    expect(ev.some((e) => e.type === 'sfx')).toBe(false);
+    tl.seek(manila.start + 5.86);
     expect(tl.scene.id).toBe('manila');
-    const next = play(tl, 1);
-    expect(next.filter((e) => e.type === 'sfx').map((e) => (e.type === 'sfx' ? e.sfx : ''))).toEqual(['flash']);
+    const next = play(tl, 3);
+    expect(next.filter((e) => e.type === 'scene').map((e) => (e.type === 'scene' ? e.scene.id : ''))).toEqual(['tunnel']);
   });
 
   it('follows the video clock: syncTo fires what it passes and never runs backwards', () => {
@@ -98,7 +91,6 @@ describe('LoreTimeline', () => {
     const ev = tl.syncTo(4.5);
     expect(tl.scene.id).toBe('mactan');
     expect(ev.filter((e) => e.type === 'scene')).toHaveLength(2);
-    expect(ev.filter((e) => e.type === 'sfx').map((e) => (e.type === 'sfx' ? e.sfx : ''))).toEqual(['crack', 'flash']);
     expect(tl.syncTo(1)).toEqual([]);
     expect(tl.time).toBeCloseTo(4.5, 6);
     expect(tl.syncTo(LORE.duration + 0.2)).toContainEqual({ type: 'end', skipped: false });

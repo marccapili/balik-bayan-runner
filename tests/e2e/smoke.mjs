@@ -996,6 +996,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await wait(1500);
   s = await snap(page);
   check('lore: the painted intro video is playing and the overlay follows its clock', s.lore?.video > 0.5 && Math.abs(s.lore.video - s.lore.time) < 0.5, JSON.stringify(s.lore));
+  check('lore: after the tap the intro plays with its baked-in sound (not muted)', s.lore?.sound === true, JSON.stringify(s.lore));
   for (const [t, name] of [
     [1.2, 'title'],
     [6.6, 'mactan'],

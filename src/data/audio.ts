@@ -4,7 +4,7 @@
  * kulintang gong music from Mindanao. These loops are inspired by that sound, not transcriptions.
  * `null` = rest. Two bars (32 sixteenth steps) of melody, repeated over the root progression.
  */
-export type MusicTrack = 'lobby' | 'museum' | 'lore';
+export type MusicTrack = 'lobby' | 'museum';
 
 const _ = null;
 
@@ -32,16 +32,6 @@ export const MUSIC = {
       melody: [4, _, 4, 3, 2, _, 4, _, 5, 4, 3, _, 2, _, 0, _, 2, _, 2, 3, 4, _, 2, _, 1, 0, 1, _, 2, _, _, _],
       bass: [1, _, _, 1, _, _, 1, _, 1, _, _, 1, _, 3, _, _],
       layers: { bass: 0.15, shaker: 0.35, lead: 0.85 },
-    },
-    /** Lore cutscene: soft and slow in the past, building through the tunnel to a full chase hit. */
-    lore: {
-      bpm: 96,
-      bars: 8,
-      roots: [0, -3, -5, -7, 0, -3, -2, -1],
-      gong: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      melody: [2, _, _, 1, 0, _, _, _, 1, _, 2, _, 4, _, _, _, 3, _, _, 2, 1, _, _, _, 0, _, 1, _, 2, _, _, _],
-      bass: [1, _, _, _, _, _, 1, _, _, _, 1, _, _, _, _, _],
-      layers: { bass: 0.25, shaker: 0.55, lead: 0.85 },
     },
   },
   /** Music level while paused / reading an exhibit / in a mini-game. */

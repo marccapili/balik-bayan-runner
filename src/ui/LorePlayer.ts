@@ -3,10 +3,10 @@ import type { LoreEvent, LoreTimeline } from '../gameplay/LoreTimeline';
 
 /**
  * The lore cutscene on screen: the hand-painted intro video (speech bubbles, era cards, the
- * tunnel years and the title are painted into it), the Skip chip (always available; fades when
- * idle, a tap wakes it) and a progress bar. Each line is also put in a hidden live region for
- * screen readers. The video is muted (sound is the game's own SFX and music, cued by the
- * timeline), so it may always autoplay.
+ * tunnel years and the title are painted into it, and its score, SFX and babble are baked into its
+ * soundtrack), the Skip chip (always available; fades when idle, a tap wakes it) and a progress
+ * bar. Each line is also put in a hidden live region for screen readers. It starts after the
+ * "Tap to start" gesture so it may play with sound; if the browser still refuses, it plays muted.
  */
 export class LorePlayer {
   readonly video: HTMLVideoElement;
@@ -14,6 +14,7 @@ export class LorePlayer {
   private readonly caption: HTMLElement;
   private readonly bar: HTMLElement;
   private idle = 0;
+  private volume = 1;
 
   constructor(
     host: HTMLElement,
@@ -23,13 +24,12 @@ export class LorePlayer {
     const el = (this.el = document.createElement('div'));
     el.className = 'lore';
     el.innerHTML = `
-      <video class="lore-video" muted playsinline preload="auto" disablepictureinpicture aria-label="Intro: apat na bayani, hinigop ng portal papunta sa 2026"></video>
+      <video class="lore-video" playsinline preload="auto" disablepictureinpicture aria-label="Intro: apat na bayani, hinigop ng portal papunta sa 2026"></video>
       <div class="lore-caption" aria-live="polite"></div>
       <button class="lore-skip" data-act="skip-lore" aria-label="Skip intro">Skip ⏭</button>
       <div class="lore-progress"><i></i></div>`;
     host.appendChild(el);
     this.video = el.querySelector('video')!;
-    this.video.muted = true;
     for (const v of sources) {
       const s = document.createElement('source');
       s.src = v.src;
@@ -60,12 +60,32 @@ export class LorePlayer {
     this.caption.textContent = '';
     this.wake();
     this.seek(from);
+    this.applyVolume();
     try {
       await this.video.play();
       return true;
     } catch {
-      return false;
+      // Sound not allowed here (no user gesture): the picture still plays, silently.
+      if (this.video.muted) return false;
+      this.video.muted = true;
+      try {
+        await this.video.play();
+        return true;
+      } catch {
+        return false;
+      }
     }
+  }
+
+  /** 0 mutes (the game's mute toggle); otherwise the louder of the music / SFX sliders. */
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    this.applyVolume();
+  }
+
+  private applyVolume(): void {
+    this.video.volume = this.volume;
+    this.video.muted = this.volume <= 0;
   }
 
   /** Video clock (seconds). */

@@ -2,16 +2,17 @@
  * Opening lore cutscene ("Balik Bayan"): four heroes from four eras get sipped by time portals
  * into a 2026 museum. Plays after loading every launch (skippable).
  *
- * The picture is a pre-rendered, hand-painted 2D video (`public/lore/intro.webm` + `.mp4`, made with the
+ * The cutscene is a pre-rendered, hand-painted 2D video (`public/lore/intro.webm` + `.mp4`, made with the
  * ClaudeAnimationBase kit in `cutscene/`; storyboard in `cutscene/STORYBOARD.md`). The Taglish
- * speech bubbles, era cards and title are painted into the video; this file times what the game
- * adds on the same clock: sound cues, chibi babble for each line, music intensity, and a
- * screen-reader copy of each line. The engine-free `gameplay/LoreTimeline.ts` plays it;
+ * speech bubbles, era cards and title are painted into the picture, and its soundtrack (score, SFX,
+ * chibi babble: `cutscene/sound/score.py`) is baked into the files. This file keeps the scenes and
+ * lines on the same clock for the progress bar and a screen-reader copy of each line. The engine-free `gameplay/LoreTimeline.ts` plays it;
  * `ui/LorePlayer.ts` shows it.
  *
  * The film reads the same scenes, lines and eras from `cutscene/src/scenes/lines.js` (a unit test
  * keeps the two equal). Keep scene times in step with `shots([...])` in
- * `cutscene/src/scenes/lore.js` and line times with its `talk(...)` lip flaps.
+ * `cutscene/src/scenes/lore.js`, line times with its `talk(...)` lip flaps, and
+ * sound times with `cutscene/sound/score.py`.
  */
 import type { HeroId } from './heroes';
 
@@ -34,15 +35,6 @@ export interface LoreScene {
   hero?: HeroId;
   bubbles: readonly LoreBubble[];
 }
-
-/** Sound cue at scene-local time `at`. */
-export interface LoreCue {
-  scene: string;
-  at: number;
-  sfx: LoreSfx;
-}
-
-export type LoreSfx = 'crack' | 'whoosh' | 'sip' | 'flash' | 'land' | 'coins' | 'alert' | 'bark' | 'whoo' | 'neigh' | 'page' | 'run' | 'logo';
 
 /** The video under `public/` (served from the site base): VP9 WebM first, H.264 MP4 for Safari. */
 export const LORE_VIDEO: readonly { src: string; type: string }[] = [
@@ -105,50 +97,12 @@ export const LORE_SCENES: readonly LoreScene[] = [
   { id: 'logo', start: 52.5, dur: 4, bubbles: [] },
 ];
 
-export const LORE_CUES: readonly LoreCue[] = [
-  { scene: 'title', at: 2.1, sfx: 'crack' },
-  { scene: 'title', at: 3.2, sfx: 'flash' },
-  { scene: 'mactan', at: 1.5, sfx: 'whoosh' },
-  { scene: 'mactan', at: 5.6, sfx: 'sip' },
-  { scene: 'mactan', at: 6.4, sfx: 'flash' },
-  { scene: 'ilocos', at: 1.9, sfx: 'whoosh' },
-  { scene: 'ilocos', at: 2.1, sfx: 'neigh' },
-  { scene: 'ilocos', at: 3.15, sfx: 'land' },
-  { scene: 'ilocos', at: 5.5, sfx: 'sip' },
-  { scene: 'ilocos', at: 6.3, sfx: 'flash' },
-  { scene: 'dapitan', at: 1.8, sfx: 'whoosh' },
-  { scene: 'dapitan', at: 4.5, sfx: 'page' },
-  { scene: 'dapitan', at: 5.6, sfx: 'sip' },
-  { scene: 'dapitan', at: 7.0, sfx: 'sip' },
-  { scene: 'dapitan', at: 7.35, sfx: 'flash' },
-  { scene: 'manila', at: 1.8, sfx: 'whoosh' },
-  { scene: 'manila', at: 5.3, sfx: 'run' },
-  { scene: 'manila', at: 5.85, sfx: 'sip' },
-  { scene: 'manila', at: 6.3, sfx: 'flash' },
-  { scene: 'tunnel', at: 0.1, sfx: 'whoosh' },
-  { scene: 'tunnel', at: 1.9, sfx: 'land' },
-  { scene: 'tunnel', at: 3.8, sfx: 'whoosh' },
-  { scene: 'museum', at: 0.1, sfx: 'flash' },
-  { scene: 'museum', at: 0.45, sfx: 'land' },
-  { scene: 'museum', at: 0.95, sfx: 'land' },
-  { scene: 'museum', at: 3.15, sfx: 'coins' },
-  { scene: 'museum', at: 5.2, sfx: 'alert' },
-  { scene: 'guard', at: 0.9, sfx: 'bark' },
-  { scene: 'guard', at: 3.1, sfx: 'run' },
-  { scene: 'guard', at: 4.3, sfx: 'run' },
-  { scene: 'logo', at: 0.3, sfx: 'logo' },
-];
-
 export const LORE = {
   duration: LORE_SCENES.reduce((s, x) => Math.max(s, x.start + x.dur), 0),
   /** Skip chip fades after this long without input; a tap wakes it. */
   skipFade: 3,
   /** If the video has not started this long after Play (slow network, blocked media), skip the intro. */
   loadTimeout: 8,
-  /** Music intensity per scene (lore track layers). */
-  intensity: { title: 0, mactan: 0.1, ilocos: 0.2, dapitan: 0.3, manila: 0.45, tunnel: 0.9, museum: 0.6, guard: 1, logo: 1 } as Record<string, number>,
-  /** Chibi babble pitch (Hz) per speaker — speech bubbles "talk" in blips, no voice acting. */
-  voice: { lapulapu: 190, gabriela: 330, rizal: 240, bonifacio: 210, guard: 160, all: 260, narrator: 0 } as Record<Speaker, number>,
   /** Display names on speech bubbles. */
   names: { lapulapu: 'Lapu-Lapu', gabriela: 'Gabriela Silang', rizal: 'José Rizal', bonifacio: 'Andrés Bonifacio', guard: 'Guard', all: 'Lahat', narrator: '' } as Record<Speaker, string>,
 } as const;
