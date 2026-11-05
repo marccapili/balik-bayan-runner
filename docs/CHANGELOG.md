@@ -1,5 +1,10 @@
 # Development changelog
 
+## Hero start clips — 2026-11-05 (owner: "make a short cutscene for each hero when the player press the start")
+- PLAY now opens with a 4 s hand-painted clip of the chosen hero, in the intro's style. Each hero bursts in their own way (Lapu-Lapu leaps up, Gabriela skids in, Rizal drops in with his hat landing a beat later, Bonifacio charges in with his bolo) and strikes a pose with a line ("Tara! Laban lang!", "Walang aatras!", "Pag-aralan natin ’to!", "Sugod, mga kapatid!"). A name card with their title slams in, then they dash off and a brush wipe hands over to the portal and the museum.
+- Each clip has its own sound: a motif per hero, a landing hit, voice blips and swooshes. Volume follows the sliders and mute.
+- Tap anywhere, Skip, Esc, Enter or Space skips a clip. A clip that hasn't loaded within 1.5 s is skipped so it never holds up a run. Retry from the results screen goes straight to the run, without the clip.
+
 ## Opening lore intro, now hand-painted 2D — 2026-11-05 (owner feedback: "make it 2D so you can add facial expressions")
 - The intro is now a pre-rendered 56.5 s watercolour-and-ink cartoon (`public/lore/intro.webm` VP9 + `intro.mp4` H.264 for Safari), made with the MIT "Claude Animation Base" kit (p5.js + p5.brush) vendored in `cutscene/`. Storyboard: `cutscene/STORYBOARD.md`; the film is `cutscene/src/scenes/lore.js`, the cast `cutscene/src/scenes/bayani.js`.
 - New 2D chibi cast: Lapu-Lapu (tattoos, red putong, no sword), Gabriela Silang (tapis skirt, on her horse), Rizal (top hat, frock coat, moustache), Bonifacio (camisa, red neckerchief, bolo), plus the guard, his aspin and the horse. Faces reuse the kit's eyes, mouths and its 31 acted emotions (surprised takes, scared, dizzy, starstruck, KO…) with painted eyebrows; mouths flap while a character talks.

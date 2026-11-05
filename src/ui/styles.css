@@ -3341,6 +3341,12 @@ body.reduced-fx .tip-card.pop {
   background: var(--gold);
 }
 
+/* Hero start clip: above the portal wipe (it plays while the portal covers the screen). */
+.lore.clip {
+  z-index: 25;
+  cursor: pointer;
+}
+
 /* Tap to start (after loading: phones only allow sound after a tap). */
 .load-start {
   display: none;

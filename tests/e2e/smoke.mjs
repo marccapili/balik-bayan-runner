@@ -357,6 +357,10 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   await page.click('.lobby [data-act="play"]');
   await wait(300);
   check('PLAY starts the intro, not the chase', ['lobby', 'intro'].includes((await snap(page)).state) && (await snap(page)).runTime === 0);
+  await wait(900);
+  const cs = await snap(page);
+  check("PLAY first plays the chosen hero's start clip, with sound", !!cs.clip && /start-bonifacio\.(webm|mp4)/.test(cs.clip.src) && cs.clip.time > 0.2 && cs.clip.sound, JSON.stringify(cs.clip));
+  await page.screenshot({ path: `${OUT}/clip-start.png` });
   const fl = await until((s) => s.dropPrompt, 30000);
   check('hero floats with TAP TO DROP', fl.state === 'intro' && fl.introPhase === 'float' && fl.dropPrompt);
   await wait(2500);
@@ -495,6 +499,11 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     const back = await pollUntil(page, (s) => s.state === 'lobby', 10000);
     check('Training Exit returns to the lobby, nothing unlocked', back.state === 'lobby' && !back.training && back.hero === 'bonifacio' && !back.save.ownedHeroes.includes('lapulapu'));
     await page.click('.lobby [data-act="play"]');
+    await wait(700);
+    check('a hero start clip shows on PLAY', !!(await snap(page)).clip);
+    await page.mouse.click(640, 400);
+    const skipped = await pollUntil(page, (s) => s.state === 'intro', 3000);
+    check('tapping the start clip skips it straight into the run intro', skipped.state === 'intro' && !skipped.clip);
     const run = await pollUntil(page, (s) => s.state === 'intro', 15000);
     check('normal PLAY after training is a real run again', run.state === 'intro' && !run.training && run.hero === 'bonifacio');
     check('no console errors (training)', errors.length === 0, errors.slice(0, 3).join(' | '));
@@ -992,7 +1001,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await wait(600);
   let s = await snap(page);
   check('lore: Enter on the start screen plays the intro (and does not skip it)', s.state === 'lore' && s.lore?.time < 5);
-  check('lore: Skip chip shows from the first second', await page.isVisible('.lore-skip'));
+  check('lore: Skip chip shows from the first second', await page.isVisible('.lore:not(.clip) .lore-skip'));
   await wait(1500);
   s = await snap(page);
   check('lore: the painted intro video is playing and the overlay follows its clock', s.lore?.video > 0.5 && Math.abs(s.lore.video - s.lore.time) < 0.5, JSON.stringify(s.lore));
@@ -1027,7 +1036,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   const t0 = Date.now();
   while ((await snap(page)).state !== 'lobby' && Date.now() - t0 < 15000) await wait(100);
   check('lore: Esc skips to the lobby', (await snap(page)).state === 'lobby');
-  check('lore: overlay hidden in the lobby', !(await page.isVisible('.lore-skip')));
+  check('lore: overlay hidden in the lobby', !(await page.isVisible('.lore:not(.clip) .lore-skip')));
   // Replay from Settings, then let it reach its natural end.
   await wait(800);
   await page.click('.lobby [data-act="settings"]');
@@ -1062,9 +1071,9 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
     await wait(900);
     await page.screenshot({ path: `${OUT}/lore-${name}.png` });
   }
-  const box = await page.locator('.lore-skip').boundingBox();
+  const box = await page.locator('.lore:not(.clip) .lore-skip').boundingBox();
   check('lore (phone): Skip chip is thumb-sized (≥ 44 px tall)', !!box && box.height >= 44);
-  await page.tap('.lore-skip');
+  await page.tap('.lore:not(.clip) .lore-skip');
   const t0 = Date.now();
   while ((await snap(page)).state !== 'lobby' && Date.now() - t0 < 15000) await wait(100);
   check('lore (phone): tapping Skip goes to the lobby', (await snap(page)).state === 'lobby');

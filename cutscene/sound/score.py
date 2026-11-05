@@ -564,6 +564,11 @@ def main(out):
     compose()
     effects()
     voices()
+    mixdown(out)
+
+
+def mixdown(out):
+    """Ducks music under voices, adds room, fades, limits and writes the buses (MUS / FX / VO, length N) as a WAV."""
     # sidechain-ish: duck music a little under each line
     duck = np.ones(N)
     k = np.abs(VO).sum(0)
@@ -583,7 +588,7 @@ def main(out):
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes(pcm.tobytes())
-    print(f'wrote {out} ({DUR}s)')
+    print(f'wrote {out} ({N / SR:.2f}s)')
 
 
 if __name__ == '__main__':

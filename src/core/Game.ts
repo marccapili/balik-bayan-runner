@@ -2,6 +2,8 @@ import { preloadHeroModels } from '../characters/HeroGlb';
 import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
 import { MUSIC } from '../data/audio';
 import { LORE, LORE_VIDEO } from '../data/lore';
+import { HERO_CLIP, HERO_CLIPS, heroClipSources } from '../data/heroClips';
+import { ClipPlayer } from '../ui/ClipPlayer';
 import { LoreTimeline, type LoreEvent } from '../gameplay/LoreTimeline';
 import type { LorePlayer } from '../ui/LorePlayer';
 import { TIPS, TIP_LOCKED_SUFFIX } from '../data/tutorial';
@@ -74,6 +76,8 @@ export class Game {
   /** Opening lore cutscene (null outside the 'lore' state). */
   private lore: { timeline: LoreTimeline; wait: number } | null = null;
   private lorePlayer: LorePlayer | null = null;
+  /** The chosen hero's start clip, played on PLAY (null with ?play / ?noclip). */
+  private clipPlayer: ClipPlayer | null = null;
   private loreModules: ReturnType<typeof loadLore> | null = null;
 
   constructor(
@@ -185,6 +189,11 @@ export class Game {
       onSound: (s) => this.sfx.play(MINI_SOUND[s]),
     });
     this.transition = new Transition(this.uiRoot);
+    if (!q.has('noclip') && !q.has('play')) {
+      this.clipPlayer = new ClipPlayer(this.uiRoot);
+      const st = this.save.data.settings;
+      this.clipPlayer.setVolume(st.muted ? 0 : Math.max(st.musicVolume, st.sfxVolume));
+    }
     this.applySettings();
     this.museum.onRoomChange = (r) => {
       // Training stays in one hall and has its own tag; skip the gallery banner there.
@@ -302,6 +311,7 @@ export class Game {
     document.body.classList.toggle('large-text', s.largeText);
     this.sfx.setMuted(s.muted);
     this.lorePlayer?.setVolume(s.muted ? 0 : Math.max(s.musicVolume, s.sfxVolume));
+    this.clipPlayer?.setVolume(s.muted ? 0 : Math.max(s.musicVolume, s.sfxVolume));
     this.hud?.setMuted(s.muted);
     if (this.museum) this.museum.reducedEffects = s.reducedEffects;
     document.body.classList.toggle('reduced-fx', s.reducedEffects);
@@ -315,6 +325,22 @@ export class Game {
       this.lobbyScene.active = true;
       this.lobbyScene.setHero(this.heroId, this.save.skinOf(this.heroId));
     }
+    this.preloadClip();
+  }
+
+  /** Buffers the selected hero's start clip so PLAY starts it at once. */
+  private preloadClip(): void {
+    const id = this.heroId;
+    this.clipPlayer?.load(id, heroClipSources(id).map((v) => ({ src: import.meta.env.BASE_URL + v.src, type: v.type })));
+  }
+
+  /** The chosen hero's start clip, over the portal wipe; resolves when it ends or is skipped. */
+  private async playHeroClip(): Promise<void> {
+    const c = this.clipPlayer;
+    if (!c) return;
+    this.preloadClip();
+    await c.play(HERO_CLIPS[this.heroId].line, HERO_CLIP.startTimeout);
+    this.input.releaseAll();
   }
 
   private showMuseum(): void {
@@ -327,15 +353,19 @@ export class Game {
     this.hud?.setAbility(ABILITIES[h.abilityKind].icon, h.ability);
   }
 
-  /** PLAY: lobby slides out → portal wipe → museum reveal with the hero hovering. */
+  /** PLAY: hero start clip (over a portal wipe) → museum reveal with the hero hovering. */
   async play(): Promise<void> {
     if (this.switching || this.fsm.state !== 'lobby' || !this.museum) return;
     this.switching = true;
-    this.sfx.play('portal');
+    // The hero's start clip starts right away, inside the tap (so phones let it play with sound); the portal
+    // wipe covers the lobby behind it and reveals the museum once the clip is over.
+    const clip = this.playHeroClip();
+    if (!this.clipPlayer) this.sfx.play('portal');
     this.lobby?.playOut();
-    await this.transition?.cover();
+    await Promise.all([this.transition?.cover(), clip]);
     this.showMuseum();
     this.beginIntro();
+    this.clipPlayer?.hide();
     await this.transition?.reveal();
     this.switching = false;
   }
@@ -517,6 +547,7 @@ export class Game {
     this.updateMusic(state);
     this.hud?.tickFps(dt);
     // While the intro video covers the screen, the 3D scenes don't render at all.
+    if (this.clipPlayer?.visible) return;
     if (state === 'lobby' || state === 'boot') this.lobbyScene?.scene.render();
     else if (state === 'lore') return;
     else this.museum?.scene.render();
@@ -525,8 +556,8 @@ export class Game {
   /** Picks the loop + intensity for the current state (cheap; Music only acts on changes). */
   private updateMusic(state: string): void {
     const run = this.museum?.run;
-    // The intro video carries its own score and sound effects.
-    if (state === 'lore') return this.music.set(null);
+    // The intro video and the hero start clips carry their own score and sound effects.
+    if (state === 'lore' || this.clipPlayer?.visible) return this.music.set(null);
     if (state === 'boot' || state === 'lobby') return this.music.set('lobby');
     if (state === 'gameover' || !run) return this.music.set(null);
     const enemies = run.training ? 0 : run.guards.length;
@@ -918,6 +949,7 @@ export class Game {
     this.museum?.setHero(id, this.save.skinOf(id));
     this.lobbyScene?.setHero(id, this.save.skinOf(id));
     this.lobby?.refresh();
+    this.preloadClip();
   }
 
   /** Read-only snapshot for automated browser tests. */
@@ -966,6 +998,7 @@ export class Game {
       lore: this.lore
         ? { time: this.lore.timeline.time, scene: this.lore.timeline.scene.id, video: this.lorePlayer?.time ?? 0, bubble: this.lore.timeline.currentBubble?.text ?? null, skip: this.lorePlayer?.skipVisible ?? false, sound: this.lorePlayer ? !this.lorePlayer.video.muted && this.lorePlayer.video.volume > 0 : false }
         : null,
+      clip: this.clipPlayer?.visible ? { time: this.clipPlayer.video.currentTime, sound: !this.clipPlayer.video.muted && this.clipPlayer.video.volume > 0, src: this.clipPlayer.video.currentSrc } : null,
       previewHero: this.lobby?.previewHero,
       save: { ...this.save.data },
       state: this.fsm.state,
