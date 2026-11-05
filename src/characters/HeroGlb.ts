@@ -38,6 +38,7 @@ export async function preloadHeroModels(): Promise<void> {
       const res = await fetch(def.url);
       if (!res.ok) throw new Error(`${res.status} ${def.url}`);
       const g = parseGlb(await res.arrayBuffer());
+      if (def.centerX) for (let i = 0; i < g.positions.length; i += 3) g.positions[i] = g.positions[i]! - def.centerX;
       // Scale to rig units here so every scene can build the mesh instantly.
       const positions = g.positions.map((v) => v * def.height);
       const normals = new Float32Array(positions.length);

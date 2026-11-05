@@ -1,5 +1,9 @@
 # Development changelog
 
+## Sculpted Lapu-Lapu — 2026-11-05 (owner: "update Lapu-Lapu's visuals", with their GLB)
+- Lapu-Lapu now uses the owner's sculpted model (`public/models/lapulapu.glb`): red putong, long hair, tattoos, bead necklace, round belt buckle, red loincloth, wrist guards, gold earrings, no weapon. It is skinned onto the same rig as Bonifacio and Rizal, so idle, run, ability and lobby poses work unchanged. Skins other than classic keep the procedural model.
+- His hair sweeps to one side, so the model's bounding box is off-centre. A new `centerX` landmark in `data/heroModels.ts` shifts the body onto the rig's midline before skinning.
+
 ## Run objective, slow-mo exhibits, intro credits — 2026-11-05 (owner request + Claude's suggestions, approved)
 - **Objective card:** when the first guard starts chasing, the world slows to ¼ speed and a card pops up: "Alamin ang kasaysayan! Hanapin at i-unlock ang lahat ng exhibits…", showing the 🏛 0/15 counter. Any tap, key or the "Game na! ▶" button closes it, and the HUD's exhibit counter pulses so players see where progress lives. It shows on every run (copy in `data/tutorial.ts#OBJECTIVE`). Pausing over it closes it first.
 - **Slow-motion mini-games:** while you play an exhibit's mini-game the world runs at ¼ speed (`MINIGAME.worldSlow`), like the Time Freeze gadget. Enemies still creep closer, the screen gets a cold time-freeze tint, and the music drags (`MUSIC.slowMoTempo`).

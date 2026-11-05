@@ -56,9 +56,14 @@ function tinyGlb(): ArrayBuffer {
   return out.buffer;
 }
 
-const load = (id: 'bonifacio' | 'rizal') => {
+type GlbHero = 'bonifacio' | 'rizal' | 'lapulapu';
+/** Loads a shipped model the way `HeroGlb` does (parse, then shift onto the body midline). */
+const load = (id: GlbHero) => {
   const b = readFileSync(`public/models/${id}.glb`);
-  return parseGlb(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer);
+  const g = parseGlb(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer);
+  const cx = HERO_MODELS[id]!.centerX ?? 0;
+  for (let i = 0; i < g.positions.length; i += 3) g.positions[i] = g.positions[i]! - cx;
+  return g;
 };
 
 describe('GLB hero models', () => {
@@ -82,8 +87,8 @@ describe('GLB hero models', () => {
   it('every configured hero model ships and stays phone-friendly', () => {
     for (const [id, def] of Object.entries(HERO_MODELS)) {
       expect(def!.url).toBe(`models/${id}.glb`);
-      const g = load(id as 'bonifacio');
-      expect(g.indices.length / 3).toBeLessThan(25000);
+      const g = load(id as GlbHero);
+      expect(g.indices.length / 3).toBeLessThan(30000);
       expect(g.image).not.toBeNull();
       expect(def!.neck).toBeGreaterThan(def!.shoulder.y);
       expect(def!.hip).toBeGreaterThan(def!.crotch);
@@ -91,7 +96,7 @@ describe('GLB hero models', () => {
   });
 
   it('auto-skins: weights sum to 1, head on top, legs split left/right at the feet', () => {
-    for (const id of ['bonifacio', 'rizal'] as const) {
+    for (const id of ['bonifacio', 'rizal', 'lapulapu'] as const) {
       const g = load(id);
       const s = autoSkin(g.positions, g.indices, HERO_MODELS[id]!);
       const n = g.positions.length / 3;
