@@ -28,6 +28,8 @@ export interface LobbyCallbacks {
   onSetting(key: 'musicVolume' | 'sfxVolume' | 'quality' | 'showFps' | 'largeText' | 'tutorial', value: number | string | boolean): void;
   onReset(): void;
   onClick(): void;
+  /** Settings → watch the opening lore cutscene again. */
+  onReplayLore(): void;
 }
 
 type Panel = 'leaderboard' | 'settings' | 'profile' | 'missions' | 'daily' | 'archive';
@@ -317,6 +319,9 @@ export class Lobby {
       case 'largeText':
         this.cb.onSetting('largeText', !this.save.data.settings.largeText);
         this.renderPanel();
+        break;
+      case 'replayLore':
+        this.cb.onReplayLore();
         break;
       case 'tutorial':
         this.cb.onSetting('tutorial', true);
@@ -672,6 +677,7 @@ export class Lobby {
           <h3>Accessibility</h3>
           <button class="btn toggle" data-act="reduced">Reduced effects: <b>${d.settings.reducedEffects ? 'ON' : 'OFF'}</b><small>Less particles, walang camera shake / flicker</small></button>
           <button class="btn toggle" data-act="largeText">Malaking text: <b>${d.settings.largeText ? 'ON' : 'OFF'}</b></button>
+          <button class="btn toggle" data-act="replayLore">Panoorin ulit ang intro 🎬<small>Paano napunta ang mga bayani sa 2026</small></button>
           <button class="btn toggle" data-act="tutorial">Ipakita ulit ang tutorial tips 🎓</button>
           <button class="btn danger" data-act="reset">${armed ? 'Sure ka? Tap ulit para i-reset 😬' : 'Reset progress 🧹'}</button>`;
         break;

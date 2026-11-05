@@ -1,7 +1,34 @@
 import type { HeroRig } from '../characters/HeroModel';
 import { clamp, damp, lerp } from '../utils/math';
 
-export type AnimState = 'idle' | 'locomotion' | 'float' | 'fall' | 'land' | 'hurt' | 'ability' | 'stunned' | 'defeated' | 'wave';
+export type AnimState =
+  | 'idle'
+  | 'locomotion'
+  | 'float'
+  | 'fall'
+  | 'land'
+  | 'hurt'
+  | 'ability'
+  | 'stunned'
+  | 'defeated'
+  | 'wave'
+  // Lore cutscene clips (named poses + easing, see data/lore.ts):
+  | 'write'
+  | 'startle'
+  | 'brace'
+  | 'reach'
+  | 'cling'
+  | 'tumble'
+  | 'ride'
+  | 'sitWrite'
+  | 'point'
+  | 'sitUp';
+
+/** Ease a clip in over its first `sec` seconds (slow in, per the cutscene animation rules). */
+const easeIn = (t: number, sec: number): number => {
+  const x = clamp(t / sec, 0, 1);
+  return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
+};
 
 /**
  * Procedural animation controller shared by every hero rig.
@@ -59,6 +86,7 @@ export class HeroAnimator {
     if (this.state !== 'defeated' && r.body.rotation.x !== 0) {
       r.body.rotation.x = 0;
     }
+    if (this.state !== 'startle' && this.state !== 'land' && r.body.scaling.y !== 1) r.body.scaling.set(1, 1, 1);
     if (this.state === 'hurt' && this.stateTime >= HURT_SECONDS) this.state = 'locomotion';
     if (this.state === 'wave' && this.stateTime >= WAVE_SECONDS) this.state = 'idle';
 
@@ -157,6 +185,104 @@ export class HeroAnimator {
       r.legL.rotation.x = 0.35 * e;
       r.legR.rotation.x = -0.1 * e;
       for (const f of r.flutter) f.rotation.x = -0.3 * e;
+    } else if (this.state === 'write' || this.state === 'sitWrite') {
+      // Head down over the papers, writing hand scribbling, the other steadying the page.
+      const e = easeIn(this.stateTime, 0.4);
+      const sit = this.state === 'sitWrite';
+      const scrib = Math.sin(this.time * 14) * 0.08;
+      r.armR.rotation.set(-1.15 * e + scrib, 0, 0.25 + Math.sin(this.time * 9) * 0.06);
+      r.armL.rotation.set(-0.95 * e, 0, -0.3);
+      r.legL.rotation.x = sit ? -1.45 * e : 0;
+      r.legR.rotation.x = sit ? -1.45 * e : 0;
+      r.torso.rotation.set(0.28 * e, 0, 0);
+      r.head.rotation.set(0.32 * e + Math.sin(this.time * 1.1) * 0.03, Math.sin(this.time * 0.6) * 0.06, 0);
+      r.body.position.y = sit ? -0.12 * e : 0;
+      for (const f of r.flutter) f.rotation.x = 0.04;
+    } else if (this.state === 'startle') {
+      // Jump back with arms up: quick squash, then a held big-eyed reaction pose.
+      const t = this.stateTime;
+      const pop = Math.sin(clamp(t / 0.32, 0, 1) * Math.PI);
+      const e = easeIn(t, 0.18);
+      r.armL.rotation.set(-2.2 * e, 0, -0.6 * e);
+      r.armR.rotation.set(-2.0 * e, 0, 0.7 * e);
+      r.legL.rotation.x = -0.25 * e;
+      r.legR.rotation.x = 0.2 * e;
+      r.torso.rotation.set(-0.22 * e, 0, 0.05 * e);
+      r.head.rotation.set(-0.18 * e, 0, -0.08 * e);
+      r.body.position.y = pop * 0.16;
+      r.body.scaling.set(1 - pop * 0.08, 1 + pop * 0.14, 1 - pop * 0.08);
+      for (const f of r.flutter) f.rotation.x = -0.2 * pop;
+    } else if (this.state === 'brace' || this.state === 'reach' || this.state === 'cling') {
+      // Fighting the pull: lean away from the portal (+z ahead), arms forward / gripping, cloth whipping toward it.
+      const e = easeIn(this.stateTime, 0.35);
+      const shake = Math.sin(this.time * 31) * 0.04;
+      if (this.state === 'brace') {
+        r.armL.rotation.set(-1.4 * e, 0, -0.5 * e);
+        r.armR.rotation.set(-1.1 * e, 0, 0.55 * e);
+        r.legL.rotation.x = 0.55 * e;
+        r.legR.rotation.x = -0.45 * e;
+        r.torso.rotation.set(-0.35 * e + shake, 0, 0);
+      } else if (this.state === 'reach') {
+        // Reaching after something flying into the portal.
+        r.armR.rotation.set(-1.75 * e + shake, 0, 0.12);
+        r.armL.rotation.set(-0.5 * e, 0, -0.5 * e);
+        r.legL.rotation.x = -0.35 * e;
+        r.legR.rotation.x = 0.35 * e;
+        r.torso.rotation.set(0.3 * e, 0, 0);
+      } else {
+        // Arms back gripping a post behind, body stretched toward the portal.
+        r.armL.rotation.set(1.6 * e + shake, 0, -0.25);
+        r.armR.rotation.set(1.5 * e - shake, 0, 0.25);
+        r.legL.rotation.x = -0.5 * e + Math.sin(this.time * 17) * 0.3 * e;
+        r.legR.rotation.x = -0.3 * e - Math.sin(this.time * 17) * 0.3 * e;
+        r.torso.rotation.set(0.2 * e, 0, 0);
+      }
+      r.head.rotation.set(-0.1 * e, Math.sin(this.time * 4) * 0.12, 0);
+      r.body.position.y = 0;
+      for (const f of r.flutter) f.rotation.x = -0.9 * e + Math.sin(this.time * 22) * 0.15;
+    } else if (this.state === 'tumble') {
+      // Starfish spin through the time tunnel (the scene spins the root; limbs flail out of phase).
+      const a = this.time * 6;
+      r.armL.rotation.set(-1.6 + Math.sin(a) * 0.6, 0, -1.0 + Math.cos(a * 0.8) * 0.3);
+      r.armR.rotation.set(-1.2 + Math.sin(a + 2) * 0.6, 0, 1.1 + Math.cos(a * 0.7) * 0.3);
+      r.legL.rotation.x = 0.5 + Math.sin(a * 1.3) * 0.5;
+      r.legR.rotation.x = -0.4 + Math.sin(a * 1.3 + 1.5) * 0.5;
+      r.torso.rotation.set(Math.sin(a * 0.5) * 0.2, 0, 0);
+      r.head.rotation.set(-0.2, 0, Math.sin(a * 0.9) * 0.2);
+      r.body.position.y = 0;
+      for (const f of r.flutter) f.rotation.x = -0.6 + Math.sin(a * 2) * 0.3;
+    } else if (this.state === 'ride') {
+      // Seated on horseback: legs forward and apart, hands on the reins, a little trot bob.
+      const bob = Math.abs(Math.sin(this.time * 7)) * 0.03;
+      r.legL.rotation.set(-1.25, 0, -0.35);
+      r.legR.rotation.set(-1.25, 0, 0.35);
+      r.armL.rotation.set(-0.9, 0, -0.2);
+      r.armR.rotation.set(-0.9, 0, 0.2);
+      r.torso.rotation.set(0.05, 0, 0);
+      r.head.rotation.set(0, Math.sin(this.time * 0.7) * 0.15, 0);
+      r.body.position.y = bob;
+      for (const f of r.flutter) f.rotation.x = 0.3 + Math.sin(this.time * 7) * 0.08;
+    } else if (this.state === 'point') {
+      // Guard: flashlight arm straight out, other hand up — "HOY!".
+      const e = easeIn(this.stateTime, 0.25);
+      r.armR.rotation.set(-1.5 * e, 0, 0.1);
+      r.armL.rotation.set(-0.3 * e, 0, -1.9 * e + Math.sin(this.time * 12) * 0.12 * e);
+      r.legL.rotation.x = 0.25 * e;
+      r.legR.rotation.x = -0.15 * e;
+      r.torso.rotation.set(-0.1 * e, 0, 0);
+      r.head.rotation.set(-0.05, 0, 0.06 * Math.sin(this.time * 6));
+      r.body.position.y = 0;
+    } else if (this.state === 'sitUp') {
+      // Dazed on the floor after the drop: legs out, propped on hands, head wobble.
+      const e = easeIn(this.stateTime, 0.5);
+      r.legL.rotation.set(-1.45, 0, -0.2);
+      r.legR.rotation.set(-1.4, 0, 0.25);
+      r.armL.rotation.set(0.6 * e, 0, -0.5);
+      r.armR.rotation.set(0.6 * e, 0, 0.5);
+      r.torso.rotation.set(-0.2 * e, 0, 0);
+      r.head.rotation.set(-0.1, 0, Math.sin(this.time * 4) * 0.14);
+      r.body.position.y = -0.28;
+      for (const f of r.flutter) f.rotation.x = 0.1;
     } else if (this.state === 'land') {
       const t = clamp(this.stateTime / 0.35, 0, 1);
       const squash = Math.sin(t * Math.PI) * 0.18;

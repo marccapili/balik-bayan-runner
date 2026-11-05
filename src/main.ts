@@ -13,12 +13,29 @@ async function boot(): Promise<void> {
   try {
     const game = new Game(canvas, ui);
     (window as unknown as { __bbr: Game }).__bbr = game;
-    await game.start((p, text) => {
+    const needsTap = await game.start((p, text) => {
       bar.style.width = `${Math.round(p * 100)}%`;
       label.textContent = text;
     });
-    loading.classList.add('done');
-    window.setTimeout(() => loading.remove(), 600);
+    const close = (): void => {
+      loading.classList.add('done');
+      window.setTimeout(() => loading.remove(), 600);
+    };
+    if (!needsTap) return close();
+    // Phones only allow sound after a tap, so the lore intro starts from this button.
+    loading.classList.add('ready');
+    const btn = document.getElementById('load-start') as HTMLButtonElement;
+    btn.focus();
+    let started = false;
+    const go = (): void => {
+      if (started) return;
+      started = true;
+      void game.beginLore().then(close);
+    };
+    btn.addEventListener('click', go);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Enter' || e.code === 'Space') go();
+    });
   } catch (err) {
     console.error(err);
     label.textContent = 'Ay, may error sa pag-load 😭 Try i-refresh or gumamit ng ibang browser (kailangan ng WebGL).';

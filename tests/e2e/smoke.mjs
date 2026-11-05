@@ -255,7 +255,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(URL);
+  await page.goto(URL + '?nolore');
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
   await wait(1500);
   const until = async (pred, maxMs = 20000) => {
@@ -472,7 +472,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     const errors = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(String(e)));
-    await page.goto(URL);
+    await page.goto(URL + '?nolore');
     await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
     await page.click('.lb-left [data-act="collection"]');
     await page.click('.ccard[data-id="lapulapu"]');
@@ -509,7 +509,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     const errors = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(String(e)));
-    await page.goto(URL);
+    await page.goto(URL + '?nolore');
     await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
     check('no diamond exchange anywhere', (await page.locator('[data-act="exchange"]').count()) === 0);
     await page.click('.lb-left [data-act="collection"]');
@@ -852,7 +852,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(URL);
+  await page.goto(URL + '?nolore');
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'lobby', null, { timeout: 30000 });
   await page.click('[data-act="settings"]');
   await wait(200);
@@ -973,6 +973,102 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await page.tap('[data-act="detailBack"]');
   await page.tap('[data-act="closeCollection"]');
   check(`no console errors (${label})`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
+// ── Lore intro (normal boot): Tap to start → cutscene → Skip / natural end → lobby; Replay from Settings ──
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(URL);
+  await page.waitForSelector('#loading.ready', { timeout: 60000 });
+  check('lore: loading ends on "Tap to start", game waits in boot', (await snap(page)).state === 'boot' && (await page.isVisible('#load-start')));
+  await page.screenshot({ path: `${OUT}/lore-tap-to-start.png` });
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
+  await wait(600);
+  let s = await snap(page);
+  check('lore: Enter on the start screen plays the intro (and does not skip it)', s.state === 'lore' && s.lore?.time < 5);
+  check('lore: Skip chip shows from the first second', await page.isVisible('.lore-skip'));
+  await wait(1500);
+  s = await snap(page);
+  check('lore: the painted intro video is playing and the overlay follows its clock', s.lore?.video > 0.5 && Math.abs(s.lore.video - s.lore.time) < 0.5, JSON.stringify(s.lore));
+  check('lore: after the tap the intro plays with its baked-in sound (not muted)', s.lore?.sound === true, JSON.stringify(s.lore));
+  for (const [t, name] of [
+    [1.2, 'title'],
+    [6.6, 'mactan'],
+    [10.0, 'mactan-sip'],
+    [16.3, 'ilocos'],
+    [23.2, 'dapitan'],
+    [32.0, 'manila'],
+    [38.4, 'tunnel'],
+    [42.5, 'museum'],
+    [45.0, 'museum-portraits'],
+    [48.1, 'guard'],
+    [50.4, 'takbo'],
+    [53.6, 'logo'],
+    [55.2, 'logo-portal'],
+  ]) {
+    await page.evaluate((t) => window.__bbr.debug.loreSeek(t), t);
+    await wait(900);
+    await page.screenshot({ path: `${OUT}/lore-${name}.png` });
+  }
+  s = await snap(page);
+  check('lore: seeking walks every scene up to the logo', s.lore?.scene === 'logo');
+  // A tap on the picture only wakes the Skip chip.
+  await page.evaluate(() => window.__bbr.debug.loreSeek(20));
+  await page.mouse.click(640, 360);
+  await wait(300);
+  check('lore: tapping the picture does not skip', (await snap(page)).state === 'lore');
+  await page.keyboard.press('Escape');
+  const t0 = Date.now();
+  while ((await snap(page)).state !== 'lobby' && Date.now() - t0 < 15000) await wait(100);
+  check('lore: Esc skips to the lobby', (await snap(page)).state === 'lobby');
+  check('lore: overlay hidden in the lobby', !(await page.isVisible('.lore-skip')));
+  // Replay from Settings, then let it reach its natural end.
+  await wait(800);
+  await page.click('.lobby [data-act="settings"]');
+  await page.click('.lobby [data-act="replayLore"]');
+  await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
+  check('lore: Settings → Panoorin ulit ang intro replays it from the start', (await snap(page)).lore?.time < 5);
+  await page.evaluate(() => window.__bbr.debug.loreSeek(56.1));
+  const t1 = Date.now();
+  while ((await snap(page)).state !== 'lobby' && Date.now() - t1 < 20000) await wait(100);
+  check('lore: the intro ends by itself into the lobby', (await snap(page)).state === 'lobby');
+  check('no console errors (lore desktop)', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await page.goto(URL);
+  await page.waitForSelector('#loading.ready', { timeout: 60000 });
+  await page.tap('#load-start', { force: true });
+  await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
+  for (const [t, name] of [
+    [6.6, 'phone-mactan'],
+    [16.3, 'phone-ilocos'],
+    [38.4, 'phone-tunnel'],
+    [48.1, 'phone-guard'],
+    [53.6, 'phone-logo'],
+  ]) {
+    await page.evaluate((t) => window.__bbr.debug.loreSeek(t), t);
+    await wait(900);
+    await page.screenshot({ path: `${OUT}/lore-${name}.png` });
+  }
+  const box = await page.locator('.lore-skip').boundingBox();
+  check('lore (phone): Skip chip is thumb-sized (≥ 44 px tall)', !!box && box.height >= 44);
+  await page.tap('.lore-skip');
+  const t0 = Date.now();
+  while ((await snap(page)).state !== 'lobby' && Date.now() - t0 < 15000) await wait(100);
+  check('lore (phone): tapping Skip goes to the lobby', (await snap(page)).state === 'lobby');
+  check('no console errors (lore phone)', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }
 

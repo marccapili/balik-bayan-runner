@@ -3257,3 +3257,107 @@ body.reduced-fx .tip-card.pop {
 .hud[data-mode='off'] .tip-card {
   display: none;
 }
+
+/* ── Lore cutscene (intro video + comic overlay) ── */
+.lore {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: none;
+  pointer-events: auto;
+  overflow: hidden;
+  font-family: var(--font-display);
+  color: var(--cream);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.lore.on {
+  display: block;
+}
+.lore.on {
+  background: #000;
+}
+/* The hand-painted intro video. Landscape: whole frame. Portrait: zoomed so the centre ~62% of the
+   picture (where the action is staged) fills the width. */
+.lore-video {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  background: #000;
+  pointer-events: none;
+}
+@media (orientation: portrait) {
+  .lore-video {
+    width: 160vw;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+}
+/* The lines are painted into the video; this copy is only for screen readers. */
+.lore-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.lore-skip {
+  position: absolute;
+  top: calc(12px + var(--safe-top));
+  right: calc(16px + var(--safe-right));
+  z-index: 6;
+  min-width: 96px;
+  min-height: 46px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 246, 223, 0.8);
+  background: rgba(15, 20, 48, 0.75);
+  color: var(--cream);
+  font: 800 18px var(--font-display);
+  cursor: pointer;
+  transition: opacity 0.4s;
+}
+.lore-skip:active { transform: scale(0.95); }
+.lore.idle .lore-skip { opacity: 0.35; }
+.lore-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  z-index: 6;
+  background: rgba(255, 255, 255, 0.1);
+}
+.lore-progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--gold);
+}
+
+/* Tap to start (after loading: phones only allow sound after a tap). */
+.load-start {
+  display: none;
+  margin: 18px auto 0;
+  padding: 14px 34px;
+  min-height: 52px;
+  border-radius: 999px;
+  border: 3px solid #fff1c4;
+  background: linear-gradient(var(--gold), var(--gold-deep));
+  color: #2a1608;
+  font: 800 22px var(--font-display);
+  cursor: pointer;
+  animation: load-pulse 1.4s ease-in-out infinite;
+}
+#loading.ready .load-start { display: block; }
+#loading.ready .load-track,
+#loading.ready #load-label { display: none; }
+@keyframes load-pulse {
+  50% { transform: scale(1.06); }
+}
