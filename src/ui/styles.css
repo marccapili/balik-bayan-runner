@@ -3545,3 +3545,5 @@ body.reduced-fx .lore.flashing .lore-flash { animation-name: lore-flash-soft; an
 @keyframes load-pulse {
   50% { transform: scale(1.06); }
 }
+/* Keep the year cracks clear of the narrator line on short screens. */
+.lore[data-scene='title'] .lore-cracks { margin-bottom: 26vh; }
