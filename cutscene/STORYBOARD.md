@@ -1,7 +1,8 @@
 # Balik Bayan Runner — opening (2D, hand-painted)
 
-55.5 s, 16:9, 24 fps. Speech is NOT painted in: the game draws the Taglish bubbles over the video
-(`src/data/lore.ts`, same times as below). Keep the main action inside the centre ~1200 px so the
+56.5 s, 16:9, 24 fps. The Taglish speech bubbles, narrator line, era cards, tunnel years and the title are
+painted in (`src/scenes/captions.js`, texts and times in `src/scenes/lines.js`, which must match the game's
+`src/data/lore.ts`: a unit test checks). Keep the main action inside the centre ~1200 px so the
 phone-portrait crop still reads.
 
 ## Rendering
@@ -32,4 +33,4 @@ Watercolour `fill` is off for this film (`bayani.js` turns fills into flat washe
 | 5 | Time tunnel | 36–41 | All four tumble through swirling rings (dizzy / scared) → Lapu-Lapu and Bonifacio bonk heads → "SINO KA?! …SINO KAYO?!" → light at the end → white |
 | 6 | Museum, 2026 | 41–47 | Portal in the ceiling drops them in a pile (KO) → Gabriela lands on her feet → Rizal's hat lands last, on Rizal → they pop up, look around, see their own portraits (starstruck) → "Nasaan tayo? Kailangan natin malaman!" → a flashlight beam sweeps over them |
 | 7 | The guard | 47–52.5 | Guard + aspin march in → "HOY! Bawal 'yan dito!" (angry, dog barks) → all four: !! → Bonifacio: "TAKBO!!!" → they bolt, dust clouds → Rizal's hat is left behind… he dashes back for it → iris out |
-| 8 | Logo | 52.5–55.5 | Paper, a calm portal, the four running along the bottom; the game shows the logo |
+| 8 | Title | 52.5–56.5 | Portal and the four running → "Balik Bayan Runner" slams in over a sun, subtitle types on ("Takbo, bayani. Ang kasaysayan ay naghihintay!") → the title is pulled into the portal, which swells to fill the screen → white, into the game |

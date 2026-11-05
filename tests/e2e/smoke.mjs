@@ -1009,6 +1009,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
     [48.1, 'guard'],
     [50.4, 'takbo'],
     [53.6, 'logo'],
+    [55.2, 'logo-portal'],
   ]) {
     await page.evaluate((t) => window.__bbr.debug.loreSeek(t), t);
     await wait(900);
@@ -1032,7 +1033,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await page.click('.lobby [data-act="replayLore"]');
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
   check('lore: Settings → Panoorin ulit ang intro replays it from the start', (await snap(page)).lore?.time < 5);
-  await page.evaluate(() => window.__bbr.debug.loreSeek(55.1));
+  await page.evaluate(() => window.__bbr.debug.loreSeek(56.1));
   const t1 = Date.now();
   while ((await snap(page)).state !== 'lobby' && Date.now() - t1 < 20000) await wait(100);
   check('lore: the intro ends by itself into the lobby', (await snap(page)).state === 'lobby');

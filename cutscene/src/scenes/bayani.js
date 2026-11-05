@@ -242,6 +242,7 @@
       const top = EMOTE_TOP.includes(o.emote), d = o.flip ? -1 : 1;
       emote(o.emote, x + d * (top ? 0 : 5.4) * u * s, y + dy + (top ? -17.5 : -15) * u * s * (1 - sq), u * .95 * s, o.emoteK ?? 1, o.emoteAge ?? T);
     }
+    if (window.HEADS && s > .25) HEADS[who] = toScreen(x, y + dy - (who === 'rizal' && !o.hatOff && !o.noHat ? 21 : 16.4) * u * s);
     rs('after');
   };
   window.topHat = topHat;

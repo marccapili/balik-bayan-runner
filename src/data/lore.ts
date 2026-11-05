@@ -3,13 +3,15 @@
  * into a 2026 museum. Plays after loading every launch (skippable).
  *
  * The picture is a pre-rendered, hand-painted 2D video (`public/lore/intro.webm` + `.mp4`, made with the
- * ClaudeAnimationBase kit in `cutscene/`; storyboard in `cutscene/STORYBOARD.md`). This file is
- * everything the game draws or plays ON TOP of it, timed to the video: era cards, Taglish speech
- * bubbles, sound cues, the tunnel year counter and the logo. The engine-free
- * `gameplay/LoreTimeline.ts` plays it; `ui/LorePlayer.ts` shows it.
+ * ClaudeAnimationBase kit in `cutscene/`; storyboard in `cutscene/STORYBOARD.md`). The Taglish
+ * speech bubbles, era cards and title are painted into the video; this file times what the game
+ * adds on the same clock: sound cues, chibi babble for each line, music intensity, and a
+ * screen-reader copy of each line. The engine-free `gameplay/LoreTimeline.ts` plays it;
+ * `ui/LorePlayer.ts` shows it.
  *
- * Keep the scene times in step with `shots([...])` at the bottom of `cutscene/src/scenes/lore.js`
- * and the bubble times in step with its `talk(...)` lip flaps.
+ * The film reads the same scenes, lines and eras from `cutscene/src/scenes/lines.js` (a unit test
+ * keeps the two equal). Keep scene times in step with `shots([...])` in
+ * `cutscene/src/scenes/lore.js` and line times with its `talk(...)` lip flaps.
  */
 import type { HeroId } from './heroes';
 
@@ -100,7 +102,7 @@ export const LORE_SCENES: readonly LoreScene[] = [
       { at: 2.55, until: 3.7, who: 'bonifacio', text: 'TAKBO!!!' },
     ],
   },
-  { id: 'logo', start: 52.5, dur: 3, bubbles: [] },
+  { id: 'logo', start: 52.5, dur: 4, bubbles: [] },
 ];
 
 export const LORE_CUES: readonly LoreCue[] = [
@@ -139,8 +141,6 @@ export const LORE_CUES: readonly LoreCue[] = [
 
 export const LORE = {
   duration: LORE_SCENES.reduce((s, x) => Math.max(s, x.start + x.dur), 0),
-  /** The logo slams in this long into the logo scene. */
-  logoAt: 0.3,
   /** Skip chip fades after this long without input; a tap wakes it. */
   skipFade: 3,
   /** If the video has not started this long after Play (slow network, blocked media), skip the intro. */
@@ -151,6 +151,4 @@ export const LORE = {
   voice: { lapulapu: 190, gabriela: 330, rizal: 240, bonifacio: 210, guard: 160, all: 260, narrator: 0 } as Record<Speaker, number>,
   /** Display names on speech bubbles. */
   names: { lapulapu: 'Lapu-Lapu', gabriela: 'Gabriela Silang', rizal: 'José Rizal', bonifacio: 'Andrés Bonifacio', guard: 'Guard', all: 'Lahat', narrator: '' } as Record<Speaker, string>,
-  /** Year counter in the tunnel (DOM), evenly spread over the tunnel scene. */
-  tunnelYears: [1896, 1946, 1986, 2026] as const,
 } as const;

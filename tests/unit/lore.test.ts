@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GAME_TRANSITIONS, StateMachine, type GameState } from '../../src/core/StateMachine';
 import { LORE, LORE_CUES, LORE_SCENES } from '../../src/data/lore';
 import { LoreTimeline, type LoreEvent } from '../../src/gameplay/LoreTimeline';
+import filmLines from '../../cutscene/src/scenes/lines.js?raw';
 
 const play = (tl: LoreTimeline, seconds: number, dt = 1 / 60): LoreEvent[] => {
   const out: LoreEvent[] = [];
@@ -112,5 +113,16 @@ describe('lore state flow', () => {
     expect(f.can('playing')).toBe(false);
     expect(f.transition('lobby')).toBe(true);
     expect(f.transition('lore')).toBe(true);
+  });
+});
+
+describe('lore film text', () => {
+  it('the painted film (cutscene/src/scenes/lines.js) has the same scenes, eras and lines as data/lore.ts', () => {
+    const src = filmLines;
+    const win: { LORE_FILM?: { scenes: { id: string; start: number; era: string | null; lines: [number, number, string, string][] }[] } } = {};
+    new Function('window', src)(win);
+    const film = win.LORE_FILM!.scenes;
+    expect(film.map((s) => [s.id, s.start, s.era ?? undefined])).toEqual(LORE_SCENES.map((s) => [s.id, s.start, s.era]));
+    film.forEach((s, i) => expect(s.lines).toEqual(LORE_SCENES[i]!.bubbles.map((b) => [b.at, b.until, b.who, b.text])));
   });
 });

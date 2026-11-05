@@ -277,7 +277,7 @@ async function setup() {
   brush.scaleBrushes(5); defineBrushes();
   paperG = makePaper(); grainC = makeGrain(); glowTex = makeGlowTex(); letG = createGraphics(W, H); letG.pixelDensity(1);
   outC = document.getElementById('out'); outX = outC.getContext('2d');
-  await document.fonts.load('100px "Permanent Marker"');
+  await document.fonts.load('100px "Permanent Marker"'); await document.fonts.load('800 100px "Baloo 2"');
   window.ready = true;
   if (!location.search.includes('render')) devUI();
 }

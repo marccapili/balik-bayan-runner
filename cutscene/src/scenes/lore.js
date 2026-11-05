@@ -52,6 +52,7 @@
     const fk = seg(lt, 2.95, 3.3);
     if (fk > 0) { glow(960, 240, 300 + 900 * fk, '#FFF5E2', 1); }
     camEnd();
+    lines(t);
     if (lt < .45) iris(960, 520, lerp(0, 1300, easeIn(lt / .45)));
     flash(seg(lt, 3.2, 3.5) * (1 - seg(lt, 3.6, 3.75)), '#F7F0FF');
     wipeOut(lt, dur, NIGHT);
@@ -98,6 +99,7 @@
     // the portal burps shut: a puff and a twinkle
     if (lt > tGone) { glow(...P0, 200 * Math.exp(-(lt - tGone) * 4), '#FFF5E2', .9); dust(P0[0], P0[1] + 40, tGone + .25, lt, 3, 50); }
     camEnd();
+    lines(t);
     wipeIn(lt, NIGHT); wipeOut(lt, dur, DUSK);
   }
 
@@ -141,6 +143,7 @@
     } else if (lt < tGone) { const p = sip(lt, tLift, tGone, [1070, G - 9 * u], P0); hero(p.x, p.y + 9 * u * p.s, u, { ...o, eyes: 'cry', mouth: 'wail', s: p.s, rot: p.rot, sq: p.sq, smear: .6, wind: -1, noShadow: true }); }
     if (lt > tGone) glow(...P0, 180 * Math.exp(-(lt - tGone) * 4), '#FFF5E2', .9);
     camEnd();
+    lines(t);
     wipeIn(lt, DUSK); wipeOut(lt, dur, WARM);
   }
 
@@ -207,6 +210,7 @@
     }
     if (lt > tClose) glow(...P0, 180 * Math.exp(-(lt - tClose) * 4), '#FFF5E2', .9);
     camEnd();
+    lines(t);
     flash(.35 * seg(lt, tGlow, tGlow + .1) * (1 - seg(lt, tGlow + .1, tGlow + .4)), '#E9DDFF');
     wipeIn(lt, WARM); wipeOut(lt, dur, DUSK);
   }
@@ -256,6 +260,7 @@
     if (lt > tGone) glow(...P0, 200 * Math.exp(-(lt - tGone) * 3), '#FFF5E2', .9);
     if (lt > 6.8 && lt < 7.6) dust(P0[0], P0[1] + 60, 6.85, lt, 3, 50);
     camEnd();
+    lines(t);
     wipeIn(lt, DUSK); wipeOut(lt, dur, NIGHT);
   }
 
@@ -301,6 +306,7 @@
     // Rizal's hat tumbles along behind
     if (lt > 1) { const a = 2 * TAU / 4 + lt * .9 - .5, R = 420; boilSeed('hatT'); push(); translate(960 + Math.cos(a) * R, 560 + Math.sin(a) * R * .6 - 120); rotate(lt * 5); scale(.8); topHat(15, 1); pop(); }
     camEnd();
+    lines(t);
     flash(seg(lt, dur - .45, dur), '#FFFDF6');
   }
 
@@ -368,6 +374,7 @@
       glow(bx, 900, 220, '#FFF2B0', .5);
     }
     camEnd();
+    lines(t);
     flash(1 - seg(lt, 0, .35), '#FFFDF6');
   }
 
@@ -401,19 +408,44 @@
     if (lt < tChase + .6) { boilSeed('beamG'); paint([[gx - 120, 760], [gx - 900, 600], [gx - 900, 1000]], { wash: '#FFF2B0', washOp: 70, ink: null }); }
     const eye = toScreen(880, G - 160);
     camEnd();
+    lines(t);
     if (lt > tIris) iris(...eye, lt < dur - .3 ? lerp(1500, 260, ease(seg(lt, tIris, dur - .3))) : lerp(260, 0, easeIn(seg(lt, dur - .3, dur - .05))));
   }
 
   // ---------- 8. logo backdrop ----------
+  // ---------- 8. the title, then a portal transition into the game ----------
   function shotLogo(t, lt, dur) {
+    window.HEADS = {};
+    const tSlam = .3, tSub = 1.0, tGo = dur - .95;
+    const go = easeIn(seg(lt, tGo, dur - .2));
     paint(rectPts(-60, -60, W + 120, H + 120), { wash: '#1F2550', ink: null });
-    portal(960, 420, 300, backOut(seg(lt, 0, .5)), t);
+    portal(960, 470, 330 + 1400 * go, backOut(seg(lt, 0, .5)), t, { suck: .4 + go });
     boilSeed('logoGround'); paint(rectPts(-60, 1000, W + 120, 300), { wash: '#2F3C7A', ink: null });
     ['lapulapu', 'gabriela', 'rizal', 'bonifacio'].forEach((who, i) => {
-      const x = lerp(-200, 2100, frac(lt * .22 + i * .09)) - i * 0;
+      const x = lerp(-200, 2100, frac(lt * .22 + i * .09));
       hero(x - i * 190, 1000, 12, { who, ...feel('excited', lt + i), view: 'q', walk: lt * 4 + i * .3, run: true, boilKey: who + 'logo', wind: 1 });
     });
+    // darken behind the title as it slams in
+    const dim = seg(lt, tSlam, tSlam + .3) * (1 - go);
+    if (dim > 0) { boilSeed('dim'); paint(rectPts(-60, -60, W + 120, H + 120), { wash: '#0A0D24', washOp: 150 * dim, ink: null }); }
+    const k = lt < tSlam ? 0 : lerp(2.4, 1, backOut(seg(lt, tSlam, tSlam + .45))) * (1 - .95 * go), rot = lerp(-.1, -.035, seg(lt, tSlam, tSlam + .45)) + go * 2;
+    const a = seg(lt, tSlam, tSlam + .12) * (1 - seg(go, .7, 1));
+    if (k > 0 && a > 0) {
+      const P = (y) => [960 + Math.sin(rot) * (540 - y) * k, 540 + (y - 540) * k * Math.cos(rot)];
+      push(); translate(...P(250)); rotate(lt * .4); boilSeed('sun');
+      glow(0, 0, 150 * k, '#F2C14E', a);
+      paint(starPts(0, 0, 80 * k, .55, 8), { wash: '#F2C14E', ink: PAL.ink, sw: 1.2 });
+      paint(ellPts(0, 0, 38 * k, 38 * k, 18), { wash: '#FFE08A', ink: PAL.ink, sw: 1 });
+      pop();
+      const F = (px) => `800 ${Math.round(px)}px "Baloo 2", "Trebuchet MS", sans-serif`;
+      letter('Balik Bayan', ...P(470), 170 * k, '#FFF6DF', { font: F(170 * k), stroke: '#2A1608', ink: false, rot, alpha: a });
+      letter('Runner', ...P(640), 190 * k, '#F2C14E', { font: F(190 * k), stroke: '#2A1608', ink: false, rot, alpha: a });
+      const sub = 'Takbo, bayani. Ang kasaysayan ay naghihintay!';
+      if (lt > tSub) letter(sub.slice(0, Math.floor((lt - tSub) * 34)), ...P(780), 46 * k, '#FFF6DF', { font: F(46 * k), stroke: '#0A0D24', ink: false, rot, alpha: a });
+    }
+    flushLetters();
     if (lt < .3) iris(960, 540, lerp(0, 1500, easeIn(lt / .3)));
+    flash(seg(lt, dur - .45, dur - .1), '#FFFDF6');
   }
 
   shots([[0, shotTitle], [4, shotMactan], [12, shotIlocos], [20, shotDapitan], [28, shotManila], [36, shotTunnel], [41, shotMuseum], [47, shotGuard], [52.5, shotLogo]]);
