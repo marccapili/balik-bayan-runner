@@ -993,18 +993,22 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   let s = await snap(page);
   check('lore: Enter on the start screen plays the intro (and does not skip it)', s.state === 'lore' && s.lore?.time < 5);
   check('lore: Skip chip shows from the first second', await page.isVisible('.lore-skip'));
+  await wait(1500);
+  s = await snap(page);
+  check('lore: the painted intro video is playing and the overlay follows its clock', s.lore?.video > 0.5 && Math.abs(s.lore.video - s.lore.time) < 0.5, JSON.stringify(s.lore));
   for (const [t, name] of [
     [1.2, 'title'],
-    [6.0, 'mactan'],
+    [6.6, 'mactan'],
     [10.0, 'mactan-sip'],
-    [15.6, 'ilocos'],
-    [26.0, 'dapitan'],
-    [35.4, 'manila'],
-    [41.0, 'tunnel'],
-    [49.0, 'museum'],
-    [52.6, 'guard'],
-    [55.1, 'takbo'],
-    [58.4, 'logo'],
+    [16.3, 'ilocos'],
+    [23.2, 'dapitan'],
+    [32.0, 'manila'],
+    [38.4, 'tunnel'],
+    [42.5, 'museum'],
+    [45.0, 'museum-portraits'],
+    [48.1, 'guard'],
+    [50.4, 'takbo'],
+    [53.6, 'logo'],
   ]) {
     await page.evaluate((t) => window.__bbr.debug.loreSeek(t), t);
     await wait(900);
@@ -1028,7 +1032,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await page.click('.lobby [data-act="replayLore"]');
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
   check('lore: Settings → Panoorin ulit ang intro replays it from the start', (await snap(page)).lore?.time < 5);
-  await page.evaluate(() => window.__bbr.debug.loreSeek(59.6));
+  await page.evaluate(() => window.__bbr.debug.loreSeek(55.1));
   const t1 = Date.now();
   while ((await snap(page)).state !== 'lobby' && Date.now() - t1 < 20000) await wait(100);
   check('lore: the intro ends by itself into the lobby', (await snap(page)).state === 'lobby');
@@ -1046,11 +1050,11 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await page.tap('#load-start', { force: true });
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
   for (const [t, name] of [
-    [6.0, 'phone-mactan'],
-    [15.6, 'phone-ilocos'],
-    [41.0, 'phone-tunnel'],
-    [52.6, 'phone-guard'],
-    [58.4, 'phone-logo'],
+    [6.6, 'phone-mactan'],
+    [16.3, 'phone-ilocos'],
+    [38.4, 'phone-tunnel'],
+    [48.1, 'phone-guard'],
+    [53.6, 'phone-logo'],
   ]) {
     await page.evaluate((t) => window.__bbr.debug.loreSeek(t), t);
     await wait(900);

@@ -3258,7 +3258,7 @@ body.reduced-fx .tip-card.pop {
   display: none;
 }
 
-/* ── Lore cutscene (comic-panel overlay) ── */
+/* ── Lore cutscene (intro video + comic overlay) ── */
 .lore {
   position: fixed;
   inset: 0;
@@ -3275,68 +3275,32 @@ body.reduced-fx .tip-card.pop {
 .lore.on {
   display: block;
 }
-.lore-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: clamp(28px, 9vh, 72px);
+.lore.on {
   background: #000;
-  z-index: 1;
 }
-.lore-bar.top {
-  top: 0;
-}
-.lore-bar.bottom {
-  bottom: 0;
-}
-.lore-title {
+/* The hand-painted intro video. Landscape: whole frame. Portrait: zoomed so the centre ~62% of the
+   picture (where the action is staged) fills the width. */
+.lore-video {
   position: absolute;
-  inset: 0;
-  display: none;
-  background: radial-gradient(circle at 50% 45%, #1c1430, #050409 70%);
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  background: #000;
+  pointer-events: none;
 }
-.lore[data-scene='title'] .lore-title {
-  display: grid;
-  place-items: center;
-}
-.lore-cracks {
-  display: flex;
-  gap: clamp(18px, 6vw, 60px);
-}
-.lc {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  opacity: 0;
-  animation: lore-crack-in 0.5s ease-out forwards;
-}
-.lc i {
-  width: 6px;
-  height: clamp(60px, 14vh, 120px);
-  background: linear-gradient(#fff6df, #ff7ad9 50%, #f2c14e);
-  clip-path: polygon(50% 0, 100% 22%, 20% 45%, 90% 68%, 30% 86%, 50% 100%, 0 80%, 70% 60%, 0 38%, 80% 20%);
-  transform: scaleX(2.4);
-  filter: drop-shadow(0 0 10px #ff7ad9);
-  animation: lore-flicker 0.6s steps(2) infinite;
-}
-.lc b {
-  font-size: clamp(14px, 3.6vw, 20px);
-  color: var(--gold);
-  letter-spacing: 1px;
-}
-.lc1 { animation-delay: 0.35s; }
-.lc2 { animation-delay: 0.7s; }
-.lc3 { animation-delay: 1.05s; }
-@keyframes lore-crack-in {
-  from { opacity: 0; transform: scale(0.6); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes lore-flicker {
-  50% { opacity: 0.7; }
+@media (orientation: portrait) {
+  .lore-video {
+    width: 160vw;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
 }
 .lore-era {
   position: absolute;
-  top: calc(clamp(28px, 9vh, 72px) + 12px + var(--safe-top));
+  top: calc(12px + var(--safe-top));
   left: calc(16px + var(--safe-left));
   z-index: 2;
   padding: 6px 14px 4px;
@@ -3356,7 +3320,7 @@ body.reduced-fx .tip-card.pop {
 .lore-bubble {
   position: absolute;
   left: 50%;
-  bottom: calc(clamp(28px, 9vh, 72px) + 18px + var(--safe-bottom));
+  bottom: calc(5vh + 18px + var(--safe-bottom));
   z-index: 2;
   max-width: min(560px, 86vw);
   transform: translateX(-50%) scale(0.6);
@@ -3453,44 +3417,6 @@ body.reduced-fx .tip-card.pop {
   from { opacity: 0; transform: scale(2.4) rotate(-6deg); }
   to { opacity: 1; transform: scale(1) rotate(-2deg); }
 }
-.lore-flash {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  background: #fff;
-  opacity: 0;
-  pointer-events: none;
-}
-.lore.flashing .lore-flash { animation: lore-flash 0.45s ease-out; }
-@keyframes lore-flash {
-  0% { opacity: 0.95; }
-  100% { opacity: 0; }
-}
-/* Reduced effects: a soft fade instead of a bright flash. */
-body.reduced-fx .lore.flashing .lore-flash { animation-name: lore-flash-soft; animation-duration: 0.8s; }
-@keyframes lore-flash-soft {
-  0% { opacity: 0.35; }
-  100% { opacity: 0; }
-}
-/* Ink wipe: the frame starts inked over and an iris opens from the centre onto the new scene. */
-.lore-wipe {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 5;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 0 0 0 #0b0710;
-  pointer-events: none;
-}
-.lore.wiping .lore-wipe { animation: lore-wipe 0.45s ease-out forwards; }
-@keyframes lore-wipe {
-  0% { width: 0; height: 0; box-shadow: 0 0 0 150vmax #0b0710; }
-  99% { width: 230vmax; height: 230vmax; box-shadow: 0 0 0 150vmax #0b0710; }
-  100% { width: 230vmax; height: 230vmax; box-shadow: 0 0 0 0 #0b0710; }
-}
 .lore-skip {
   position: absolute;
   top: calc(12px + var(--safe-top));
@@ -3545,5 +3471,3 @@ body.reduced-fx .lore.flashing .lore-flash { animation-name: lore-flash-soft; an
 @keyframes load-pulse {
   50% { transform: scale(1.06); }
 }
-/* Keep the year cracks clear of the narrator line on short screens. */
-.lore[data-scene='title'] .lore-cracks { margin-bottom: 26vh; }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_TRANSITIONS, StateMachine, type GameState } from '../../src/core/StateMachine';
-import { LORE, LORE_CUES, LORE_SCENES, VIGNETTE } from '../../src/data/lore';
-import { ease, LoreTimeline, type LoreEvent } from '../../src/gameplay/LoreTimeline';
+import { LORE, LORE_CUES, LORE_SCENES } from '../../src/data/lore';
+import { LoreTimeline, type LoreEvent } from '../../src/gameplay/LoreTimeline';
 
 const play = (tl: LoreTimeline, seconds: number, dt = 1 / 60): LoreEvent[] => {
   const out: LoreEvent[] = [];
@@ -10,34 +10,31 @@ const play = (tl: LoreTimeline, seconds: number, dt = 1 / 60): LoreEvent[] => {
 };
 
 describe('lore data', () => {
-  it('scenes are back to back, about a minute, and every hero gets an equal vignette', () => {
+  it('scenes are back to back, under a minute, and every hero gets an equal vignette', () => {
     let t = 0;
     for (const s of LORE_SCENES) {
       expect(s.start).toBeCloseTo(t, 6);
       t += s.dur;
     }
-    expect(LORE.duration).toBeCloseTo(60, 6);
+    expect(LORE.duration).toBeGreaterThan(45);
+    expect(LORE.duration).toBeLessThan(60);
     const v = LORE_SCENES.filter((s) => s.hero);
     expect(v.map((s) => s.hero)).toEqual(['lapulapu', 'gabriela', 'rizal', 'bonifacio']);
     expect(new Set(v.map((s) => s.dur)).size).toBe(1);
   });
 
-  it('camera shots stay 1.5-5 s (cut on action) and start at 0', () => {
+  it('every vignette has an era card, and bubbles in a scene never overlap', () => {
     for (const s of LORE_SCENES) {
-      expect(s.cams[0]!.at).toBe(0);
-      if (s.cams.length < 2) continue;
-      s.cams.forEach((c, i) => {
-        const end = s.cams[i + 1]?.at ?? s.dur;
-        expect(end - c.at).toBeGreaterThanOrEqual(1.5);
-        expect(end - c.at).toBeLessThanOrEqual(5);
+      if (s.hero) expect(s.era).toBeTruthy();
+      s.bubbles.forEach((b, i) => {
+        const next = s.bubbles[i + 1];
+        if (next) expect(next.at).toBeGreaterThanOrEqual(b.until);
       });
     }
   });
 
-  it('vignette beats are in order (anticipation before the pull)', () => {
-    const b = [VIGNETTE.crack, VIGNETTE.startle, VIGNETTE.open, VIGNETTE.resist, VIGNETTE.windup, VIGNETTE.sip, VIGNETTE.flash, VIGNETTE.close];
-    for (let i = 1; i < b.length; i++) expect(b[i]).toBeGreaterThan(b[i - 1]!);
-    expect(VIGNETTE.close).toBeLessThan(VIGNETTE.dur);
+  it('every line stays up long enough to read (~14 characters a second)', () => {
+    for (const s of LORE_SCENES) for (const b of s.bubbles) expect(b.until - b.at).toBeGreaterThanOrEqual(Math.min(2.4, b.text.length / 14 - 0.6));
   });
 
   it('bubbles and cues sit inside their scenes, every bubble has a name and pitch', () => {
@@ -88,31 +85,23 @@ describe('LoreTimeline', () => {
   it('seek jumps without replaying passed sounds, then continues normally', () => {
     const tl = new LoreTimeline();
     const manila = LORE_SCENES.find((s) => s.id === 'manila')!;
-    const ev = tl.seek(manila.start + VIGNETTE.sip + 0.1);
+    const ev = tl.seek(manila.start + 5.86);
     expect(ev.some((e) => e.type === 'sfx')).toBe(false);
     expect(tl.scene.id).toBe('manila');
-    expect(tl.cam.index).toBe(manila.cams.length - 1);
     const next = play(tl, 1);
     expect(next.filter((e) => e.type === 'sfx').map((e) => (e.type === 'sfx' ? e.sfx : ''))).toEqual(['flash']);
   });
 
-  it('camera eases from the shot start to its end pose', () => {
+  it('follows the video clock: syncTo fires what it passes and never runs backwards', () => {
     const tl = new LoreTimeline();
-    const s = LORE_SCENES[1]!;
-    tl.seek(s.start + 0.0001);
-    const a = tl.camPose();
-    expect(a.pos[0]).toBeCloseTo(s.cams[0]!.pos0[0], 2);
-    tl.seek(s.start + s.cams[1]!.at - 0.0001);
-    const b = tl.camPose();
-    expect(b.pos[0]).toBeCloseTo(s.cams[0]!.pos1[0], 2);
-  });
-
-  it('easing curves start at 0 and land on 1 (back overshoots in between)', () => {
-    for (const k of ['linear', 'inOut', 'out', 'back'] as const) {
-      expect(ease(k, 0)).toBeCloseTo(0, 6);
-      expect(ease(k, 1)).toBeCloseTo(1, 6);
-    }
-    expect(Math.max(...[0.6, 0.7, 0.8, 0.9].map((t) => ease('back', t)))).toBeGreaterThan(1);
+    const ev = tl.syncTo(4.5);
+    expect(tl.scene.id).toBe('mactan');
+    expect(ev.filter((e) => e.type === 'scene')).toHaveLength(2);
+    expect(ev.filter((e) => e.type === 'sfx').map((e) => (e.type === 'sfx' ? e.sfx : ''))).toEqual(['crack', 'flash']);
+    expect(tl.syncTo(1)).toEqual([]);
+    expect(tl.time).toBeCloseTo(4.5, 6);
+    expect(tl.syncTo(LORE.duration + 0.2)).toContainEqual({ type: 'end', skipped: false });
+    expect(tl.done).toBe(true);
   });
 });
 

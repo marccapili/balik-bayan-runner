@@ -1,32 +1,19 @@
 /**
  * Opening lore cutscene ("Balik Bayan"): four heroes from four eras get sipped by time portals
- * into a 2026 museum. Plays after loading every launch (skippable). Pure data: the engine-free
- * `gameplay/LoreTimeline.ts` plays it, `scenes/LoreScene.ts` renders it, `ui/LorePlayer.ts` draws
- * the comic overlay (letterbox, era cards, bubbles, wipes, logo).
+ * into a 2026 museum. Plays after loading every launch (skippable).
  *
- * Coordinates are local to each set: the hero stands at the origin facing +z and the portal
- * opens ahead of them at `PORTAL_AT`. Camera keys are [x, y, z] in that same space.
+ * The picture is a pre-rendered, hand-painted 2D video (`public/lore/intro.webm` + `.mp4`, made with the
+ * ClaudeAnimationBase kit in `cutscene/`; storyboard in `cutscene/STORYBOARD.md`). This file is
+ * everything the game draws or plays ON TOP of it, timed to the video: era cards, Taglish speech
+ * bubbles, sound cues, the tunnel year counter and the logo. The engine-free
+ * `gameplay/LoreTimeline.ts` plays it; `ui/LorePlayer.ts` shows it.
+ *
+ * Keep the scene times in step with `shots([...])` at the bottom of `cutscene/src/scenes/lore.js`
+ * and the bubble times in step with its `talk(...)` lip flaps.
  */
 import type { HeroId } from './heroes';
 
-export type V3 = readonly [number, number, number];
-export type LoreSet = 'title' | 'mactan' | 'ilocos' | 'dapitan' | 'manila' | 'tunnel' | 'museum' | 'logo';
-export type Ease = 'linear' | 'inOut' | 'out' | 'back';
 export type Speaker = HeroId | 'guard' | 'all' | 'narrator';
-
-/** One camera shot: eases from (pos0, tgt0) to (pos1, tgt1) until the next shot's `at`. */
-export interface LoreCam {
-  at: number;
-  pos0: V3;
-  tgt0: V3;
-  pos1: V3;
-  tgt1: V3;
-  ease?: Ease;
-  /** Field of view (radians). */
-  fov?: number;
-  /** Portrait pull-back for this shot (default LORE.portraitPull); lower it for shots near a wall. */
-  pull?: number;
-}
 
 export interface LoreBubble {
   at: number;
@@ -37,14 +24,12 @@ export interface LoreBubble {
 
 export interface LoreScene {
   id: string;
-  set: LoreSet;
   start: number;
   dur: number;
   /** Era card ("Mactan, 1521"), typed on at the start of the scene. */
   era?: string;
   /** The hero this vignette is about (vignettes only). */
   hero?: HeroId;
-  cams: readonly LoreCam[];
   bubbles: readonly LoreBubble[];
 }
 
@@ -57,194 +42,115 @@ export interface LoreCue {
 
 export type LoreSfx = 'crack' | 'whoosh' | 'sip' | 'flash' | 'land' | 'coins' | 'alert' | 'bark' | 'whoo' | 'neigh' | 'page' | 'run' | 'logo';
 
-/** Where the portal opens in every vignette (in front of the hero, above head height). */
-export const PORTAL_AT: V3 = [0, 1.55, 3.1];
-
-/**
- * Shared beat timing for the four hero vignettes (seconds into the scene). Calm → crack →
- * startle (bubble) → portal spins open → resist → anticipation lean → sipped → flash.
- */
-export const VIGNETTE = {
-  dur: 9,
-  crack: 1.9,
-  startle: 2.7,
-  open: 4.3,
-  resist: 4.9,
-  /** Lean-back wind-up before the pull wins (anticipation). */
-  windup: 6.7,
-  sip: 7.2,
-  sipDur: 0.65,
-  flash: 7.85,
-  close: 8.3,
-} as const;
-
-/** Vignette camera shots: wide establishing → face close-up on the startle → wide side as the portal opens → over-the-shoulder into the portal. */
-const vignetteCams = (h = 0, side = 1): LoreCam[] => [
-  { at: 0, pos0: [-3.2, 1.9 + h, -3.4], tgt0: [0, 1.1 + h, 1.2], pos1: [-2.5, 1.7 + h, -2.7], tgt1: [0, 1.15 + h, 1.4], ease: 'inOut' },
-  { at: VIGNETTE.startle, pos0: [1.1, 1.5 + h, 3.0], tgt0: [0, 1.2 + h, 0], pos1: [0.9, 1.45 + h, 2.6], tgt1: [0, 1.2 + h, 0], ease: 'out', fov: 0.62 },
-  { at: VIGNETTE.open, pos0: [-5.6 * side, 1.6 + h, 0.9 - (1 - side) * 1.6], tgt0: [0, 1.3 + h, 1.6], pos1: [-5.0 * side, 1.5 + h, 0.6 - (1 - side) * 1.6], tgt1: [0, 1.4 + h, 1.5], ease: 'inOut', fov: side < 1 ? 1.0 : undefined, pull: side < 1 ? 0.1 : undefined },
-  { at: VIGNETTE.windup - 0.2, pos0: [1.8, 1.7 + h, -3.6], tgt0: [0, 1.4 + h, 2.6], pos1: [1.4, 1.75 + h, -2.9], tgt1: [0, 1.55 + h, 3.1], ease: 'inOut', fov: 0.85 },
+/** The video under `public/` (served from the site base): VP9 WebM first, H.264 MP4 for Safari. */
+export const LORE_VIDEO: readonly { src: string; type: string }[] = [
+  { src: 'lore/intro.webm', type: 'video/webm' },
+  { src: 'lore/intro.mp4', type: 'video/mp4' },
 ];
 
-const T0 = 3;
-const V = VIGNETTE.dur;
+/** Each hero vignette: portal opens → reaction + line → sipped → a beat after. */
+const V = 8;
 
 export const LORE_SCENES: readonly LoreScene[] = [
-  {
-    id: 'title',
-    set: 'title',
-    start: 0,
-    dur: T0,
-    cams: [{ at: 0, pos0: [0, 0, -6], tgt0: [0, 0, 0], pos1: [0, 0, -5.5], tgt1: [0, 0, 0] }],
-    bubbles: [{ at: 0.3, until: 2.9, who: 'narrator', text: 'May nawawalang mga bayani…' }],
-  },
+  { id: 'title', start: 0, dur: 4, bubbles: [{ at: 0.5, until: 2.9, who: 'narrator', text: 'May nawawalang mga bayani…' }] },
   {
     id: 'mactan',
-    set: 'mactan',
     hero: 'lapulapu',
     era: 'Mactan, 1521',
-    start: T0,
+    start: 4,
     dur: V,
-    cams: vignetteCams(),
-    bubbles: [{ at: VIGNETTE.startle + 0.1, until: VIGNETTE.open + 0.3, who: 'lapulapu', text: 'Ano ’tong ilaw sa dagat?!' }],
+    bubbles: [{ at: 2.1, until: 4.2, who: 'lapulapu', text: 'Ano ’tong ilaw sa dagat?!' }],
   },
   {
     id: 'ilocos',
-    set: 'ilocos',
     hero: 'gabriela',
     era: 'Ilocos, 1763',
-    start: T0 + V,
+    start: 12,
     dur: V,
-    cams: vignetteCams(0.75),
-    bubbles: [{ at: VIGNETTE.startle + 0.1, until: VIGNETTE.windup, who: 'gabriela', text: 'Hala, ako pala ’yung kinukuha!' }],
+    bubbles: [{ at: 3.75, until: 5.6, who: 'gabriela', text: 'Ano ito?' }],
   },
   {
     id: 'dapitan',
-    set: 'dapitan',
     hero: 'rizal',
     era: 'Dapitan, 1890s',
-    start: T0 + 2 * V,
+    start: 20,
     dur: V,
-    cams: vignetteCams(-0.35),
-    bubbles: [{ at: VIGNETTE.open + 0.2, until: VIGNETTE.windup + 0.3, who: 'rizal', text: 'Teka, hindi pa tapos ’yung sulat ko!' }],
+    bubbles: [{ at: 2.55, until: 4.6, who: 'rizal', text: 'Teka, hindi pa tapos ’yung sulat ko!' }],
   },
   {
     id: 'manila',
-    set: 'manila',
     hero: 'bonifacio',
     era: 'Maynila, 1896',
-    start: T0 + 3 * V,
+    start: 28,
     dur: V,
-    // Inside the hut: the side shot stays within the bamboo walls.
-    cams: vignetteCams(0, 0.5),
     bubbles: [
-      { at: VIGNETTE.startle + 0.1, until: VIGNETTE.open, who: 'bonifacio', text: 'Ha? Ano ’yon?!' },
-      { at: VIGNETTE.resist + 0.4, until: VIGNETTE.sip + 0.4, who: 'bonifacio', text: 'WAIT LANG—!' },
+      { at: 0.25, until: 1.75, who: 'bonifacio', text: 'Para sa Inang Bayan!' },
+      { at: 2.05, until: 3.3, who: 'bonifacio', text: 'Ha? Ano ’yon?!' },
+      { at: 3.35, until: 5.2, who: 'bonifacio', text: 'Hindi ako takot sa ’yo!' },
     ],
   },
-  {
-    id: 'tunnel',
-    set: 'tunnel',
-    start: T0 + 4 * V,
-    dur: 6,
-    cams: [
-      { at: 0, pos0: [0, 0, -7], tgt0: [0, 0, 6], pos1: [0.4, 0.2, -5], tgt1: [0, 0, 6], ease: 'inOut', fov: 0.95 },
-      { at: 2.3, pos0: [3.4, 0.3, -3.9], tgt0: [0, -0.5, 0.6], pos1: [3.0, 0.2, -3.4], tgt1: [0, -0.5, 0.6], ease: 'out', fov: 0.75 },
-      { at: 4.1, pos0: [0, 0.3, -4], tgt0: [0, 0, 10], pos1: [0, 0.2, -2], tgt1: [0, 0, 14], ease: 'inOut', fov: 1.0 },
-    ],
-    bubbles: [{ at: 2.5, until: 4.0, who: 'all', text: 'SINO KA?! …SINO KAYO?!' }],
-  },
-  {
-    id: 'museum',
-    set: 'museum',
-    era: 'Pambansang Museo… 2026?!',
-    start: T0 + 4 * V + 6,
-    dur: 6,
-    cams: [
-      { at: 0, pos0: [0, 2.6, -8], tgt0: [0, 3.2, 0], pos1: [0, 2.2, -7], tgt1: [0, 2.4, 0], ease: 'inOut', fov: 0.85 },
-      { at: 2.0, pos0: [2.6, 1.6, -4.2], tgt0: [0, 0.6, 0], pos1: [2.2, 1.4, -3.6], tgt1: [0, 0.6, 0], ease: 'out' },
-      { at: 3.5, pos0: [1.0, 1.5, -4.0], tgt0: [0, 0.8, 0], pos1: [0.8, 1.45, -3.5], tgt1: [0, 0.85, 0], ease: 'inOut', fov: 0.7 },
-    ],
-    bubbles: [{ at: 3.6, until: 5.9, who: 'bonifacio', text: 'Bigla na lang… 2026?!' }],
-  },
+  { id: 'tunnel', start: 36, dur: 5, bubbles: [{ at: 2.0, until: 3.8, who: 'bonifacio', text: 'SINO KA?! …SINO KAYO?!' }] },
+  { id: 'museum', era: 'Museo, 2026', start: 41, dur: 6, bubbles: [{ at: 3.3, until: 5.5, who: 'gabriela', text: 'Nasaan tayo? Kailangan natin malaman!' }] },
   {
     id: 'guard',
-    set: 'museum',
-    start: T0 + 4 * V + 12,
-    dur: 5,
-    cams: [
-      { at: 0, pos0: [-2.2, 2.4, -3.2], tgt0: [0, 1.2, 7], pos1: [-1.9, 2.3, -2.8], tgt1: [0, 1.2, 7], ease: 'inOut', fov: 0.7 },
-      { at: 1.7, pos0: [2.0, 2.5, 8.6], tgt0: [0, 0.6, 0], pos1: [1.8, 2.4, 8.2], tgt1: [0, 0.6, 0], ease: 'out', fov: 0.72, pull: 0.05 },
-      { at: 3.3, pos0: [0, 1.7, -4.6], tgt0: [0, 0.9, 1.5], pos1: [0, 1.6, -7.2], tgt1: [0, 0.9, 0], ease: 'out', fov: 0.85 },
-    ],
+    start: 47,
+    dur: 5.5,
     bubbles: [
-      { at: 0.4, until: 3.2, who: 'guard', text: 'HOY! Bawal ’yan dito!' },
-      { at: 3.5, until: 5.0, who: 'all', text: 'TAKBO!!!' },
+      { at: 0.65, until: 2.45, who: 'guard', text: 'HOY! Bawal ’yan dito!' },
+      { at: 2.55, until: 3.7, who: 'bonifacio', text: 'TAKBO!!!' },
     ],
   },
-  {
-    id: 'logo',
-    set: 'logo',
-    start: T0 + 4 * V + 17,
-    dur: 4,
-    cams: [{ at: 0, pos0: [0, 1.1, -3.6], tgt0: [0, 0.95, 2], pos1: [0, 1.0, -6.6], tgt1: [0, 0.9, 2], ease: 'out', fov: 0.8 }],
-    bubbles: [],
-  },
+  { id: 'logo', start: 52.5, dur: 3, bubbles: [] },
 ];
 
 export const LORE_CUES: readonly LoreCue[] = [
-  ...(['mactan', 'ilocos', 'dapitan', 'manila'] as const).flatMap((scene) => [
-    { scene, at: VIGNETTE.crack, sfx: 'crack' as const },
-    { scene, at: VIGNETTE.open, sfx: 'whoosh' as const },
-    { scene, at: VIGNETTE.sip, sfx: 'sip' as const },
-    { scene, at: VIGNETTE.flash, sfx: 'flash' as const },
-  ]),
-  { scene: 'ilocos', at: VIGNETTE.open + 0.35, sfx: 'neigh' },
-  { scene: 'dapitan', at: VIGNETTE.open + 0.1, sfx: 'page' },
-  { scene: 'manila', at: VIGNETTE.crack + 0.5, sfx: 'page' },
+  { scene: 'title', at: 2.1, sfx: 'crack' },
+  { scene: 'title', at: 3.2, sfx: 'flash' },
+  { scene: 'mactan', at: 1.5, sfx: 'whoosh' },
+  { scene: 'mactan', at: 5.6, sfx: 'sip' },
+  { scene: 'mactan', at: 6.4, sfx: 'flash' },
+  { scene: 'ilocos', at: 1.9, sfx: 'whoosh' },
+  { scene: 'ilocos', at: 2.1, sfx: 'neigh' },
+  { scene: 'ilocos', at: 3.15, sfx: 'land' },
+  { scene: 'ilocos', at: 5.5, sfx: 'sip' },
+  { scene: 'ilocos', at: 6.3, sfx: 'flash' },
+  { scene: 'dapitan', at: 1.8, sfx: 'whoosh' },
+  { scene: 'dapitan', at: 4.5, sfx: 'page' },
+  { scene: 'dapitan', at: 5.6, sfx: 'sip' },
+  { scene: 'dapitan', at: 7.0, sfx: 'sip' },
+  { scene: 'dapitan', at: 7.35, sfx: 'flash' },
+  { scene: 'manila', at: 1.8, sfx: 'whoosh' },
+  { scene: 'manila', at: 5.3, sfx: 'run' },
+  { scene: 'manila', at: 5.85, sfx: 'sip' },
+  { scene: 'manila', at: 6.3, sfx: 'flash' },
   { scene: 'tunnel', at: 0.1, sfx: 'whoosh' },
-  { scene: 'tunnel', at: 4.3, sfx: 'whoosh' },
-  { scene: 'museum', at: 0.4, sfx: 'whoosh' },
-  { scene: 'museum', at: 2.05, sfx: 'land' },
-  { scene: 'museum', at: 2.15, sfx: 'coins' },
-  { scene: 'guard', at: 0.3, sfx: 'alert' },
-  { scene: 'guard', at: 2.4, sfx: 'bark' },
-  { scene: 'guard', at: 2.9, sfx: 'whoo' },
-  { scene: 'guard', at: 3.5, sfx: 'run' },
-  { scene: 'logo', at: 1.2, sfx: 'logo' },
+  { scene: 'tunnel', at: 1.9, sfx: 'land' },
+  { scene: 'tunnel', at: 3.8, sfx: 'whoosh' },
+  { scene: 'museum', at: 0.1, sfx: 'flash' },
+  { scene: 'museum', at: 0.45, sfx: 'land' },
+  { scene: 'museum', at: 0.95, sfx: 'land' },
+  { scene: 'museum', at: 3.15, sfx: 'coins' },
+  { scene: 'museum', at: 5.2, sfx: 'alert' },
+  { scene: 'guard', at: 0.9, sfx: 'bark' },
+  { scene: 'guard', at: 3.1, sfx: 'run' },
+  { scene: 'guard', at: 4.3, sfx: 'run' },
+  { scene: 'logo', at: 0.3, sfx: 'logo' },
 ];
 
 export const LORE = {
   duration: LORE_SCENES.reduce((s, x) => Math.max(s, x.start + x.dur), 0),
-  /** Ink wipe at every scene change (seconds). */
-  wipe: 0.45,
-  /** Logo slams in this long into the logo scene; the heroes freeze-frame at the same time. */
-  logoAt: 1.2,
+  /** The logo slams in this long into the logo scene. */
+  logoAt: 0.3,
   /** Skip chip fades after this long without input; a tap wakes it. */
   skipFade: 3,
-  /** Portrait screens pull the camera back by up to this factor so the subject still fits. */
-  portraitPull: 0.7,
+  /** If the video has not started this long after Play (slow network, blocked media), skip the intro. */
+  loadTimeout: 8,
   /** Music intensity per scene (lore track layers). */
   intensity: { title: 0, mactan: 0.1, ilocos: 0.2, dapitan: 0.3, manila: 0.45, tunnel: 0.9, museum: 0.6, guard: 1, logo: 1 } as Record<string, number>,
   /** Chibi babble pitch (Hz) per speaker — speech bubbles "talk" in blips, no voice acting. */
   voice: { lapulapu: 190, gabriela: 330, rizal: 240, bonifacio: 210, guard: 160, all: 260, narrator: 0 } as Record<Speaker, number>,
   /** Display names on speech bubbles. */
   names: { lapulapu: 'Lapu-Lapu', gabriela: 'Gabriela Silang', rizal: 'José Rizal', bonifacio: 'Andrés Bonifacio', guard: 'Guard', all: 'Lahat', narrator: '' } as Record<Speaker, string>,
-  /** Sky / fog colours per set (the colour tells the era). */
-  palette: {
-    title: { sky: '#07060f', light: '#ffffff', ground: '#000000', amb: 0.2 },
-    mactan: { sky: '#f3b46b', light: '#ffd9a0', ground: '#7a4a2a', amb: 0.85 },
-    ilocos: { sky: '#e9c27a', light: '#fff0c4', ground: '#5d6b2a', amb: 0.85 },
-    dapitan: { sky: '#d99a5a', light: '#ffe2b0', ground: '#6a4426', amb: 0.8 },
-    manila: { sky: '#1a120c', light: '#ffc46b', ground: '#3a2414', amb: 0.55 },
-    tunnel: { sky: '#2a0a3a', light: '#ffb0f0', ground: '#3a1050', amb: 0.9 },
-    museum: { sky: '#061220', light: '#9fe3ff', ground: '#10243a', amb: 0.45 },
-    logo: { sky: '#061220', light: '#9fe3ff', ground: '#10243a', amb: 0.5 },
-  } as Record<LoreSet, { sky: string; light: string; ground: string; amb: number }>,
   /** Year counter in the tunnel (DOM), evenly spread over the tunnel scene. */
   tunnelYears: [1896, 1946, 1986, 2026] as const,
-  /** Floating papers / sparkles (halved on Low quality / Reduced effects). */
-  particles: 24,
 } as const;
-
-export const LORE_SCENE_BY_ID: Record<string, LoreScene> = Object.fromEntries(LORE_SCENES.map((s) => [s.id, s]));

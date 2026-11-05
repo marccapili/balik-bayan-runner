@@ -1,9 +1,8 @@
 import { preloadHeroModels } from '../characters/HeroGlb';
 import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
 import { MUSIC } from '../data/audio';
-import { LORE, type LoreSfx } from '../data/lore';
+import { LORE, LORE_VIDEO, type LoreSfx } from '../data/lore';
 import { LoreTimeline, type LoreEvent } from '../gameplay/LoreTimeline';
-import type { LoreScene } from '../scenes/LoreScene';
 import type { LorePlayer } from '../ui/LorePlayer';
 import { TIPS, TIP_LOCKED_SUFFIX } from '../data/tutorial';
 import { Tutorial } from '../gameplay/Tutorial';
@@ -52,8 +51,8 @@ const LORE_SOUND: Record<LoreSfx, SfxName> = {
   run: 'dash',
   logo: 'logo',
 };
-/** The cutscene lives in its own chunk; started during loading so it is ready on the first tap. */
-const loadLore = (): Promise<[typeof import('../scenes/LoreScene'), typeof import('../ui/LorePlayer')]> => Promise.all([import('../scenes/LoreScene'), import('../ui/LorePlayer')]);
+/** The cutscene overlay lives in its own chunk; started during loading so it is ready on the first tap. */
+const loadLore = (): Promise<typeof import('../ui/LorePlayer')> => import('../ui/LorePlayer');
 
 /** Owns the engine, the render loop, both scenes and the top-level state machine. */
 export class Game {
@@ -88,11 +87,9 @@ export class Game {
   /** Set while in training: the hero being tried (may be locked). */
   private trainingHero: HeroId | null = null;
   /** Opening lore cutscene (null outside the 'lore' state). */
-  private lore: { scene: LoreScene; timeline: LoreTimeline } | null = null;
+  private lore: { timeline: LoreTimeline; wait: number } | null = null;
   private lorePlayer: LorePlayer | null = null;
   private loreModules: ReturnType<typeof loadLore> | null = null;
-  /** Set by the `loreStep` debug hook: the cutscene only advances when stepped (preview recording). */
-  private loreManual = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -216,7 +213,9 @@ export class Game {
 
     this.engine.runRenderLoop(() => this.frame());
     if (wantsLore) {
-      await this.loreModules;
+      // Build the (hidden) player now so the video buffers while "Tap to start" shows.
+      const { LorePlayer } = await this.loreModules!;
+      this.lorePlayer ??= this.makeLorePlayer(LorePlayer);
       return true;
     }
     this.fsm.transition('lobby');
@@ -231,31 +230,40 @@ export class Game {
     if (this.lore || this.switching || !this.fsm.can('lore')) return;
     this.switching = true;
     const fromLobby = this.fsm.state === 'lobby';
-    const [{ LoreScene }, { LorePlayer }] = await (this.loreModules ??= loadLore());
+    const { LorePlayer } = await (this.loreModules ??= loadLore());
     if (fromLobby) await this.transition?.cover();
-    const st = this.save.data.settings;
-    const skins = Object.fromEntries((['rizal', 'lapulapu', 'bonifacio', 'gabriela'] as const).map((id) => [id, this.save.skinOf(id)]));
-    const scene = new LoreScene(this.engine, { skins, high: this.highQuality, reduced: st.reducedEffects });
-    await scene.scene.whenReadyAsync();
-    this.lorePlayer ??= new LorePlayer(this.uiRoot, () => this.skipLore());
-    this.lore = { scene, timeline: new LoreTimeline() };
+    this.lorePlayer ??= this.makeLorePlayer(LorePlayer);
+    this.lore = { timeline: new LoreTimeline(), wait: 0 };
     this.lobby?.setVisible(false);
     if (this.lobbyScene) this.lobbyScene.active = false;
     this.hud?.setMode('off');
     document.body.dataset.mode = 'lore';
     this.fsm.transition('lore');
     this.input.releaseAll();
-    this.lorePlayer.show();
+    const ok = await this.lorePlayer.show(0);
     if (fromLobby) await this.transition?.reveal();
     this.switching = false;
+    // Media blocked or missing: never trap the player behind a black screen.
+    if (!ok) this.skipLore();
   }
 
+  private makeLorePlayer(P: typeof LorePlayer): LorePlayer {
+    const sources = LORE_VIDEO.map((v) => ({ src: import.meta.env.BASE_URL + v.src, type: v.type }));
+    return new P(this.uiRoot, sources, () => this.skipLore());
+  }
+
+  /** Follows the video clock; if the video never gets going, gives up and skips. */
   private advanceLore(dt: number): void {
     const l = this.lore;
-    if (!l) return;
-    if (!l.timeline.done) for (const e of l.timeline.update(dt)) this.onLoreEvent(e);
-    l.scene.update(dt, l.timeline);
-    this.lorePlayer?.update(dt, l.timeline);
+    const p = this.lorePlayer;
+    if (!l || !p) return;
+    if (!p.playing && l.timeline.time < 0.05) {
+      l.wait += dt;
+      if (l.wait > LORE.loadTimeout) return this.skipLore();
+    }
+    const t = p.video.ended ? LORE.duration : p.time;
+    if (!l.timeline.done) for (const e of l.timeline.syncTo(t)) this.onLoreEvent(e);
+    p.update(dt, l.timeline);
   }
 
   /** Skip chip / Esc / Enter / Space. */
@@ -272,14 +280,13 @@ export class Game {
     else if (e.type === 'end') void this.finishLore();
   }
 
-  /** Lore over (or skipped): portal wipe into the lobby, free the cutscene scene. */
+  /** Lore over (or skipped): portal wipe into the lobby. */
   private async finishLore(): Promise<void> {
     if (!this.lore || this.switching) return;
     this.switching = true;
     this.sfx.play('portal');
     await this.transition?.cover();
     this.lorePlayer?.hide();
-    this.lore.scene.dispose();
     this.lore = null;
     this.fsm.transition('lobby');
     this.input.releaseAll();
@@ -470,7 +477,7 @@ export class Game {
     }
     if (state === 'lore' && this.lore) {
       if (this.input.consume('confirm') || this.input.consume('ability')) this.skipLore();
-      if (!this.loreManual) this.advanceLore(dt);
+      this.advanceLore(dt);
     } else if (state === 'lobby') {
       this.lobbyScene?.update(dt);
     } else if (state === 'intro' && this.museum) {
@@ -522,8 +529,9 @@ export class Game {
     else if (state !== 'paused' && state !== 'reading') this.hud?.showTip(null);
     this.updateMusic(state);
     this.hud?.tickFps(dt);
-    if (state === 'lore' && this.lore) this.lore.scene.scene.render();
-    else if (state === 'lobby' || state === 'boot' || state === 'lore') this.lobbyScene?.scene.render();
+    // While the intro video covers the screen, the 3D scenes don't render at all.
+    if (state === 'lobby' || state === 'boot') this.lobbyScene?.scene.render();
+    else if (state === 'lore') return;
     else this.museum?.scene.render();
   }
 
@@ -846,11 +854,7 @@ export class Game {
       const l = this.lore;
       if (!l) return;
       for (const e of l.timeline.seek(t)) this.lorePlayer?.onEvent(e);
-    },
-    loreStep: (dt) => {
-      this.loreManual = true;
-      this.advanceLore(dt);
-      this.lore?.scene.scene.render();
+      this.lorePlayer?.seek(t);
     },
     teleport: (x, z) => {
       const m = this.museum?.player.motor;
@@ -972,7 +976,7 @@ export class Game {
       dropPrompt: this.hud?.dropVisible ?? false,
       lobbyPanel: this.lobby?.openPanelName ?? null,
       lore: this.lore
-        ? { time: this.lore.timeline.time, scene: this.lore.timeline.scene.id, cam: this.lore.timeline.cam.index, bubble: this.lore.timeline.currentBubble?.text ?? null, skip: this.lorePlayer?.skipVisible ?? false }
+        ? { time: this.lore.timeline.time, scene: this.lore.timeline.scene.id, video: this.lorePlayer?.time ?? 0, bubble: this.lore.timeline.currentBubble?.text ?? null, skip: this.lorePlayer?.skipVisible ?? false }
         : null,
       previewHero: this.lobby?.previewHero,
       save: { ...this.save.data },
@@ -994,8 +998,6 @@ export class Game {
 export interface DebugHooks {
   /** Jumps the lore cutscene to `t` seconds (screenshots of each shot). */
   loreSeek(t: number): void;
-  /** Stops the cutscene's own clock and advances it by exactly `dt` (frame-by-frame preview recording). */
-  loreStep(dt: number): void;
   teleport(x: number, z: number): void;
   moveGuard(i: number, x: number, z: number): void;
   /** Drops an enemy into the run now (hunting); at (x, z) if given. */

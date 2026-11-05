@@ -3,11 +3,13 @@ import type { LoreEvent, LoreTimeline } from '../gameplay/LoreTimeline';
 import { esc } from './exhibitHtml';
 
 /**
- * Comic-panel overlay for the lore cutscene: letterbox bars, era cards, speech bubbles that
- * type on, ink wipes between scenes, a white flash on portal hits, the tunnel year counter,
- * the logo slam, and the Skip chip (always available; fades when idle, a tap wakes it).
+ * The lore cutscene on screen: the hand-painted intro video, and over it the era cards, speech
+ * bubbles that type on, the tunnel year counter, the logo slam, and the Skip chip (always
+ * available; fades when idle, a tap wakes it). The video is muted (sound is the game's own SFX
+ * and music, cued by the timeline), so it may always autoplay.
  */
 export class LorePlayer {
+  readonly video: HTMLVideoElement;
   private readonly el: HTMLElement;
   private readonly era: HTMLElement;
   private readonly bubble: HTMLElement;
@@ -25,24 +27,28 @@ export class LorePlayer {
 
   constructor(
     host: HTMLElement,
+    sources: readonly { src: string; type: string }[],
     private readonly onSkip: () => void,
   ) {
     const el = (this.el = document.createElement('div'));
     el.className = 'lore';
     el.innerHTML = `
-      <div class="lore-bar top"></div><div class="lore-bar bottom"></div>
-      <div class="lore-title" aria-hidden="true">
-        <div class="lore-cracks">${[1521, 1763, '1890s', 1896].map((y, i) => `<span class="lc lc${i}"><i></i><b>${y}</b></span>`).join('')}</div>
-      </div>
+      <video class="lore-video" muted playsinline preload="auto" disablepictureinpicture aria-label="Intro: apat na bayani, hinigop ng portal papunta sa 2026"></video>
       <div class="lore-era" aria-live="polite"></div>
       <div class="lore-bubble" aria-live="polite"><span class="lb-name"></span><span class="lb-text"></span></div>
       <div class="lore-years" aria-hidden="true"></div>
       <div class="lore-logo" aria-hidden="true"><div class="ll-sun">☀</div><h1>Balik Bayan <span>Runner</span></h1><p>Takbo, bayani. Ang kasaysayan ay naghihintay!</p></div>
-      <div class="lore-flash"></div>
-      <div class="lore-wipe"></div>
       <button class="lore-skip" data-act="skip-lore" aria-label="Skip intro">Skip ⏭</button>
       <div class="lore-progress"><i></i></div>`;
     host.appendChild(el);
+    this.video = el.querySelector('video')!;
+    this.video.muted = true;
+    for (const v of sources) {
+      const el = document.createElement('source');
+      el.src = v.src;
+      el.type = v.type;
+      this.video.appendChild(el);
+    }
     this.era = el.querySelector('.lore-era')!;
     this.bubble = el.querySelector('.lore-bubble')!;
     this.bubbleName = el.querySelector('.lb-name')!;
@@ -66,17 +72,44 @@ export class LorePlayer {
     return this.visible && !this.el.classList.contains('idle');
   }
 
-  show(): void {
+  /** Shows the overlay and starts the video from `from` seconds. Resolves false if it can't play. */
+  async show(from = 0): Promise<boolean> {
     this.el.className = 'lore on';
     this.current = null;
     this.eraText = '';
     this.era.textContent = '';
     this.bubble.classList.remove('on');
     this.wake();
+    this.seek(from);
+    try {
+      await this.video.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Video clock (seconds). */
+  get time(): number {
+    return this.video.currentTime;
+  }
+
+  /** True once the video has real frames at its current time (not stalled / loading). */
+  get playing(): boolean {
+    return !this.video.paused && this.video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA;
+  }
+
+  seek(t: number): void {
+    try {
+      this.video.currentTime = t;
+    } catch {
+      /* not seekable yet: it starts from 0 */
+    }
   }
 
   hide(): void {
     this.el.className = 'lore';
+    this.video.pause();
   }
 
   wake(): void {
@@ -94,7 +127,6 @@ export class LorePlayer {
     if (e.type === 'scene') {
       const s = e.scene;
       this.el.dataset.scene = s.id;
-      if (s.start > 0) this.retrigger('wiping');
       this.eraText = s.era ?? '';
       this.eraShown = this.now;
       this.era.textContent = '';
@@ -109,8 +141,6 @@ export class LorePlayer {
         this.bubbleName.textContent = LORE.names[b.who];
         this.bubbleText.textContent = '';
       }
-    } else if (e.type === 'sfx' && e.sfx === 'flash') {
-      this.retrigger('flashing');
     }
   }
 
@@ -129,7 +159,7 @@ export class LorePlayer {
       if (this.bubbleText.textContent !== t) this.bubbleText.innerHTML = esc(t);
     }
     const s = tl.scene;
-    if (s.set === 'tunnel') {
+    if (s.id === 'tunnel') {
       const ys = LORE.tunnelYears;
       const i = Math.min(ys.length - 1, Math.floor((tl.local / s.dur) * ys.length));
       const y = String(ys[i]);
@@ -143,6 +173,9 @@ export class LorePlayer {
   }
 
   dispose(): void {
+    this.video.pause();
+    this.video.replaceChildren();
+    this.video.load();
     this.el.remove();
   }
 }

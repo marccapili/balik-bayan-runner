@@ -1,41 +1,20 @@
-import { LORE, LORE_CUES, LORE_SCENES, type Ease, type LoreBubble, type LoreCam, type LoreScene, type LoreSfx, type V3 } from '../data/lore';
+import { LORE, LORE_CUES, LORE_SCENES, type LoreBubble, type LoreScene, type LoreSfx } from '../data/lore';
 
 export type LoreEvent =
   | { type: 'scene'; scene: LoreScene }
-  | { type: 'cut'; scene: LoreScene; cam: number }
   | { type: 'bubble'; bubble: LoreBubble | null }
   | { type: 'sfx'; sfx: LoreSfx }
   | { type: 'end'; skipped: boolean };
 
-export function ease(kind: Ease | undefined, t: number): number {
-  const x = Math.min(1, Math.max(0, t));
-  switch (kind ?? 'inOut') {
-    case 'linear':
-      return x;
-    case 'out':
-      return 1 - (1 - x) ** 3;
-    case 'back': {
-      // Small overshoot then settle (smash-cut push).
-      const c = 1.4;
-      return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2;
-    }
-    default:
-      return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
-  }
-}
-
-const mix = (a: V3, b: V3, t: number): [number, number, number] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-
 /**
- * Engine-free player for the lore cutscene (unit-tested). Advances by `dt`, reports scene
- * changes, camera cuts, bubbles and sound cues as events, and exposes the eased camera pose.
- * `seek` jumps without firing passed cues (tests, replay); `skip` ends it at once.
+ * Engine-free player for the lore cutscene overlay (unit-tested). The game drives it from the
+ * video's clock (`syncTo(video.currentTime)`); it reports scene changes, bubbles and sound cues
+ * as events. `seek` jumps without firing passed cues (tests, replay); `skip` ends it at once.
  */
 export class LoreTimeline {
   time = 0;
   done = false;
   private sceneIdx = -1;
-  private camIdx = -1;
   private bubble: LoreBubble | null = null;
   private readonly fired = new Set<number>();
 
@@ -61,31 +40,9 @@ export class LoreTimeline {
     return this.bubble;
   }
 
-  /** Current camera shot and its eased 0→1 progress. */
-  get cam(): { shot: LoreCam; t: number; index: number } {
-    const s = this.scene;
-    const i = Math.max(0, this.camIdx);
-    const shot = s.cams[i]!;
-    const end = s.cams[i + 1]?.at ?? s.dur;
-    return { shot, t: (this.local - shot.at) / Math.max(0.001, end - shot.at), index: i };
-  }
-
-  /** Eased camera position + target for this frame. */
-  camPose(): { pos: [number, number, number]; tgt: [number, number, number]; fov: number; pull: number } {
-    const { shot, t } = this.cam;
-    const k = ease(shot.ease, t);
-    return { pos: mix(shot.pos0, shot.pos1, k), tgt: mix(shot.tgt0, shot.tgt1, k), fov: shot.fov ?? 0.8, pull: shot.pull ?? LORE.portraitPull };
-  }
-
   private sceneAt(t: number): number {
     let idx = 0;
     for (let i = 0; i < this.scenes.length; i++) if (t >= this.scenes[i]!.start) idx = i;
-    return idx;
-  }
-
-  private camAt(s: LoreScene, local: number): number {
-    let idx = 0;
-    for (let i = 0; i < s.cams.length; i++) if (local >= s.cams[i]!.at) idx = i;
     return idx;
   }
 
@@ -94,10 +51,15 @@ export class LoreTimeline {
   }
 
   update(dt: number): LoreEvent[] {
+    return this.syncTo(this.time + Math.max(0, dt));
+  }
+
+  /** Moves forward to `t` (the video clock), firing what it passes. Never goes backwards. */
+  syncTo(t: number): LoreEvent[] {
     const out: LoreEvent[] = [];
     if (this.done) return out;
     if (this.sceneIdx < 0) this.sync(out, true);
-    this.time += Math.max(0, dt);
+    this.time = Math.max(this.time, t);
     if (this.time >= this.duration) {
       this.time = this.duration;
       this.done = true;
@@ -108,21 +70,14 @@ export class LoreTimeline {
     return out;
   }
 
-  /** Recomputes scene / cam / bubble for `time`; fires cues only when `cues` is set. */
+  /** Recomputes scene / bubble for `time`; fires cues only when `cues` is set. */
   private sync(out: LoreEvent[], cues: boolean): void {
     const si = this.sceneAt(this.time);
     if (si !== this.sceneIdx) {
       this.sceneIdx = si;
-      this.camIdx = -1;
       out.push({ type: 'scene', scene: this.scene });
     }
-    const s = this.scene;
-    const ci = this.camAt(s, this.local);
-    if (ci !== this.camIdx) {
-      if (this.camIdx >= 0 || ci > 0) out.push({ type: 'cut', scene: s, cam: ci });
-      this.camIdx = ci;
-    }
-    const b = this.bubbleAt(s, this.local);
+    const b = this.bubbleAt(this.scene, this.local);
     if (b !== this.bubble) {
       this.bubble = b;
       out.push({ type: 'bubble', bubble: b });
