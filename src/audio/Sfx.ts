@@ -2,7 +2,7 @@
  * Tiny synthesised sound effects (Web Audio, no files, no licensing).
  * The AudioContext is created on the first user gesture to satisfy autoplay rules.
  */
-export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim' | 'bark' | 'growl' | 'whoo' | 'neigh' | 'thump' | 'poof' | 'page';
+export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim' | 'bark' | 'growl' | 'whoo' | 'neigh' | 'thump' | 'poof' | 'page' | 'crack' | 'whoosh' | 'sip' | 'flash' | 'logo';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -190,9 +190,43 @@ export class Sfx {
         this.noise(t, 0.18, 0.18, 5000);
         [659, 988].forEach((f, i) => this.tone(f, t + 0.08 + i * 0.09, 0.25, 'sine', 0.07));
         break;
+      case 'crack':
+        // Glassy glitch zap as the air splits.
+        [1800, 1200, 2400, 900].forEach((f, i) => this.tone(f, t + i * 0.035, 0.06, 'square', 0.035));
+        this.noise(t, 0.25, 0.1, 6000);
+        break;
+      case 'whoosh':
+        this.noise(t, 0.9, 0.22, 1400);
+        this.tone(110, t, 0.9, 'sawtooth', 0.05, 330);
+        break;
+      case 'sip':
+        // The portal slurps the hero in.
+        this.tone(300, t, 0.45, 'sine', 0.12, 1400);
+        this.noise(t, 0.4, 0.15, 3000);
+        break;
+      case 'flash':
+        [1047, 1568, 2093].forEach((f, i) => this.tone(f, t + i * 0.04, 0.4, 'sine', 0.06));
+        break;
+      case 'logo':
+        this.noise(t, 0.35, 0.5, 700);
+        this.tone(98, t, 0.6, 'sine', 0.28, 49);
+        [523, 659, 784, 1047].forEach((f, i) => this.tone(f, t + 0.05 + i * 0.07, 0.35, 'triangle', 0.1));
+        break;
       case 'claim':
         [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, t + i * 0.06, 0.2, 'sine', 0.1));
         break;
+    }
+  }
+
+  /** Chibi babble: short pitched blips for a speech bubble (no voice acting). */
+  babble(pitch: number, syllables: number): void {
+    if (this._muted || pitch <= 0) return;
+    const ctx = this.ensure();
+    if (!ctx || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    for (let i = 0; i < syllables; i++) {
+      const f = pitch * (1 + ((i * 7) % 5) * 0.09 + (i % 2 ? 0.05 : -0.04));
+      this.tone(f, t + i * 0.075, 0.06, 'square', 0.035, f * 1.15);
     }
   }
 }

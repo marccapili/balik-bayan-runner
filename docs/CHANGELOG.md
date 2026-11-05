@@ -1,5 +1,13 @@
 # Development changelog
 
+## Opening lore intro — 2026-11-05 (owner request, awaiting feedback)
+- After loading, a "TAP PARA MAGSIMULA" button (phones only allow sound after a tap), then a ~60 s real-time cutscene every launch: Lapu-Lapu at Mactan (1521), Gabriela Silang in Ilocos (1763), Rizal in Dapitan (1890s) and Bonifacio in Maynila (1896) each get a 9 s vignette where a crack in the air opens into a time portal and sips them in; all four tumble through a time tunnel (1896 → 2026), land in a pile in a 2026 museum at night, the guard shouts "HOY! Bawal 'yan dito!" and they scatter yelling "TAKBO!" before the logo slams in.
+- Rendered in Babylon with the same hero rigs (owner GLBs for Bonifacio and Rizal), guard, dog and multo; no video file. Sets are simple low-poly pieces; colour tells the era (sepia/gold past, magenta-gold portal, teal 2026 museum). Comic overlay: letterbox, typed era cards, speech bubbles with chibi babble blips (no voice acting), ink-iris wipes, a white flash on portal hits (soft fade with Reduced effects).
+- Skip any time: the Skip chip (top-right, thumb-sized; fades when idle, a tap wakes it), or Esc / Enter / Space. Tapping the picture never skips. Lobby Settings → "Panoorin ulit ang intro" replays it.
+- Data in `data/lore.ts`, engine-free `gameplay/LoreTimeline.ts` (unit-tested), scene `scenes/LoreScene.ts` (own lazy chunk, ~12 kB gzipped), overlay `ui/LorePlayer.ts`; new FSM state `lore` (boot → lore → lobby, lobby → lore). `?play` and `?nolore` skip it; debug `loreSeek(t)`.
+- Animation follows the saved chibi-cutscene-animation rules: anticipation before every pull, squash and stretch on the sip and the landing, eased camera shots of 1.5–5 s that cut on action, portrait screens pull the camera back.
+- No specific historical event is staged; places and years only. Props kept generic (no Katipunan flag variant shown).
+
 ## Sculpted 3D heroes: Bonifacio + Rizal — 2026-11-03 (owner models)
 - The owner's image-to-3D models replace the procedural Bonifacio and Rizal (classic look) in the lobby, Shop preview, intro and museum. Lapu-Lapu and Gabriela keep the procedural model until their GLBs arrive.
 - Models arrive unrigged, so `characters/autoSkin.ts` skins them onto the same 8-joint chibi rig: each vertex gets a body part from per-hero landmarks (`data/heroModels.ts`), then weights are blended along the mesh's own edges so joints bend smoothly. `HeroAnimator` drives them unchanged (idle, run, wave, fall, hurt, topple); arm swing is capped per model (`armLimit`) so shoulders don't stretch.
