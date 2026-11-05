@@ -1,5 +1,10 @@
 # Development changelog
 
+## Run objective, slow-mo exhibits, intro credits — 2026-11-05 (owner request + Claude's suggestions, approved)
+- **Objective card:** when the first guard starts chasing, the world slows to ¼ speed and a card pops up: "Alamin ang kasaysayan! Hanapin at i-unlock ang lahat ng exhibits…", showing the 🏛 0/15 counter. Any tap, key or the "Game na! ▶" button closes it, and the HUD's exhibit counter pulses so players see where progress lives. It shows on every run (copy in `data/tutorial.ts#OBJECTIVE`). Pausing over it closes it first.
+- **Slow-motion mini-games:** while you play an exhibit's mini-game the world runs at ¼ speed (`MINIGAME.worldSlow`), like the Time Freeze gadget. Enemies still creep closer, the screen gets a cold time-freeze tint, and the music drags (`MUSIC.slowMoTempo`).
+- **Intro credits:** the intro now opens with a 3 s painted card in a gold museum frame, "Created by Marc Reiven Capili and Anne Marielle Dillena", with its own gong-and-bells sting. The intro is now 59.5 s, and every scene moved 3 s later (`data/lore.ts`, `lines.js`, `lore.js` shots, `score.py` OFF).
+
 ## Hero start clips — 2026-11-05 (owner: "make a short cutscene for each hero when the player press the start")
 - PLAY now opens with a 4 s hand-painted clip of the chosen hero, in the intro's style. Each hero bursts in their own way (Lapu-Lapu leaps up, Gabriela skids in, Rizal drops in with his hat landing a beat later, Bonifacio charges in with his bolo) and strikes a pose with a line ("Tara! Laban lang!", "Walang aatras!", "Pag-aralan natin ’to!", "Sugod, mga kapatid!"). A name card with their title slams in, then they dash off and a brush wipe hands over to the portal and the museum.
 - Each clip has its own sound: a motif per hero, a landing hit, voice blips and swooshes. Volume follows the sliders and mute.

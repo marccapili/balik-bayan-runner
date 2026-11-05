@@ -448,5 +448,32 @@
     flash(seg(lt, dur - .45, dur - .1), '#FFFDF6');
   }
 
-  shots([[0, shotTitle], [4, shotMactan], [12, shotIlocos], [20, shotDapitan], [28, shotManila], [36, shotTunnel], [41, shotMuseum], [47, shotGuard], [52.5, shotLogo]]);
+  // ---------- credits: who made the game, in a gold museum frame ----------
+  function shotCredits(t, lt, dur) {
+    window.HEADS = {};
+    paint(rectPts(-60, -60, W + 120, H + 120), { wash: '#100E22', ink: null });
+    const k = backOut(seg(lt, .1, .55)), out = seg(lt, dur - .45, dur - .05);
+    boilSeed('credframe');
+    push(); translate(960, 540); scale(.85 + .15 * k);
+    frame(0, 0, 1180, 560, '#1F2550', 'credits');
+    pop();
+    glow(960, 540, 520, '#9F8CFF', .25 * k);
+    for (let i = 0; i < 7; i++) {   // little sparkles drifting up around the frame
+      const x = 380 + hash(i * 7.1) * 1160, y = 860 - frac(lt * .25 + hash(i * 3.3)) * 700, a = Math.sin(frac(lt * .6 + hash(i)) * Math.PI) * k;
+      if (a > .05) { boilSeed('cs' + i); paint(starPts(x, y, 14 + 10 * hash(i + 2), .4, 4), { wash: '#F2C14E', washOp: 255 * a, ink: null }); }
+    }
+    const F = (px) => `800 ${px}px "Baloo 2", "Trebuchet MS", sans-serif`, a = seg(lt, .3, .5);
+    letter('Created by', 960, 360, 54, '#F2C14E', { font: F(54), ink: false, alpha: a });
+    const n1 = 'Marc Reiven Capili', n2 = 'Anne Marielle Dillena';
+    letter(n1.slice(0, Math.max(0, Math.floor((lt - .5) * 40))), 960, 480, 92, '#FFF6DF', { font: F(92), stroke: '#2A1608', ink: false });
+    letter('and', 960, 572, 46, '#C9C2E8', { font: `italic ${F(46)}`, ink: false, alpha: seg(lt, .95, 1.1) });
+    letter(n2.slice(0, Math.max(0, Math.floor((lt - 1.05) * 40))), 960, 670, 92, '#FFF6DF', { font: F(92), stroke: '#2A1608', ink: false });
+    flushLetters();
+    if (lt < .25) flash(1 - lt / .25, '#000000');
+    if (out > 0) paint(rectPts(-60, -60, W + 120, H + 120), { wash: '#000000', washOp: 255 * out, ink: null });
+  }
+
+  // The credits come first; the film itself starts 3 s in (keep in step with lines.js and the game's data/lore.ts).
+  const CREDITS = 3;
+  shots([[0, shotCredits], ...[[0, shotTitle], [4, shotMactan], [12, shotIlocos], [20, shotDapitan], [28, shotManila], [36, shotTunnel], [41, shotMuseum], [47, shotGuard], [52.5, shotLogo]].map(([t0, f]) => [t0 + CREDITS, f])]);
 })();
