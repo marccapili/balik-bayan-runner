@@ -39,3 +39,20 @@ Watercolour `fill` is off for this film (`bayani.js` turns fills into flat washe
 | 6 | Museum, 2026 | 41–47 | Portal in the ceiling drops them in a pile (KO) → Gabriela lands on her feet → Rizal's hat lands last, on Rizal → they pop up, look around, see their own portraits (starstruck) → "Nasaan tayo? Kailangan natin malaman!" → a flashlight beam sweeps over them |
 | 7 | The guard | 47–52.5 | Guard + aspin march in → "HOY! Bawal 'yan dito!" (angry, dog barks) → all four: !! → Bonifacio: "TAKBO!!!" → they bolt, dust clouds → Rizal's hat is left behind… he dashes back for it → iris out |
 | 8 | Title | 52.5–56.5 | Portal and the four running → "Balik Bayan Runner" slams in over a sun, subtitle types on ("Takbo, bayani. Ang kasaysayan ay naghihintay!") → the title is pulled into the portal, which swells to fill the screen → white, into the game |
+
+## Hero start clips (4 s each, played on PLAY)
+
+`src/scenes/heroclips.js` holds four standalone loops, `LOOPS.start_<hero>`. Each clip runs:
+
+1. An iris opens on a backdrop of wedges in the hero's colours.
+2. The hero bursts in at 0.45 s: Lapu-Lapu leaps up, Gabriela skids in, Rizal drops in with his hat landing a beat later, and Bonifacio charges in with his bolo.
+3. The hero strikes a signature pose and says their line (0.75–2.7 s), while a name card with their title slams in.
+4. At 2.9 s the hero dashes off, and a brush wipe in the hero's colours covers the frame.
+
+The lines and titles must match `src/data/heroClips.ts` and `src/data/heroes.ts` (a unit test checks this).
+
+```
+node render.mjs --loop=start_rizal --sheet=0.5,1,2,3 --soft-gl --out=out/check/rizal.jpg   # review
+node render.mjs --loop=start_rizal --png --workers=2 --soft-gl --out=out/clip_rizal       # ~5 min a hero (4 workers time out here)
+./clips.sh rizal                                                                         # sound (sound/clips.py) + web encodes → ../public/lore/start-rizal.*
+```

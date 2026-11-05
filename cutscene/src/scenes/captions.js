@@ -44,6 +44,8 @@
     });
   }
 
+  window.speech = bubble;   // the hero start clips (heroclips.js) use the same bubbles
+
   function narrator(text, age, left) {
     const a = seg(age, 0, .3) * seg(-left, 0, .3);
     if (a <= 0) return;
