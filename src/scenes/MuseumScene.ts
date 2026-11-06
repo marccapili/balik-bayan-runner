@@ -1,3 +1,4 @@
+import { chartInReach } from '../data/baybayinChart';
 import type { Engine } from '@babylonjs/core/Engines/engine';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
@@ -69,6 +70,8 @@ export class MuseumScene implements GameScene {
   perksFor: (id: HeroId) => AbilityPerks = () => ({ abilityUnlocked: true, cooldownMult: 1, boost: 1 });
   /** Exhibit the hero can read right now (updated while playing). */
   nearExhibit: Exhibit | null = null;
+  /** Hero stands at the Library's baybayin chart (and no exhibit prompt wins). */
+  nearChart = false;
   /** Whether an exhibit is already in the Archive (markers turn blue); set by the Game. */
   isDiscovered: (id: string) => boolean = () => false;
   private intro: IntroSequence | null = null;
@@ -148,6 +151,7 @@ export class MuseumScene implements GameScene {
     this.cam.snapTo(spawn);
     this.releaseViews();
     this.nearExhibit = null;
+    this.nearChart = false;
     this.pickupViews.sync(this.run.pickups.items, 0);
     this.room = undefined;
   }
@@ -292,6 +296,7 @@ export class MuseumScene implements GameScene {
       this.player.setVisible(true);
     }
     this.nearExhibit = this.run.over ? null : exhibitInReach(this.player.position);
+    this.nearChart = !this.run.over && !this.nearExhibit && chartInReach(this.player.position);
     const run = this.run;
     this.guideTo = run.training || run.endless || run.over ? null : guideTarget(this.player.position, run.read, run.idCard);
     this.guide.update(dt, this.player.position, this.guideTo?.at ?? null, run.training ? null : run.idCard);

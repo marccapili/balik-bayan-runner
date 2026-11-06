@@ -16,7 +16,7 @@ import { PROPS, ROOMS, WALL_ART, WALLS, type Prop, type RoomId } from '../data/m
 import type { Aabb } from '../physics/Collision';
 import { mat, type MatOpts } from './materials';
 import { exhibitAsset, exhibitPhoto, WALL_PORTRAITS } from '../data/exhibitPhotos';
-import { bannerTexture, capizTexture, floorTiles, paintingTexture, photoTexture, portraitTexture, signTexture, sunMedallion } from './textures';
+import { baybayinChartTexture, bannerTexture, capizTexture, floorTiles, paintingTexture, photoTexture, portraitTexture, signTexture, sunMedallion } from './textures';
 
 export interface MuseumOccluder {
   box: Aabb;
@@ -158,6 +158,14 @@ export function buildMuseum(scene: Scene): MuseumBuild {
       const spol = exhibitPhoto('spoliarium');
       pic.material = texMat('paintingMat', spol ? photoTexture(scene, exhibitAsset(spol.file)) : paintingTexture(scene), { glow: spol ? 0.55 : 0.35 });
       pic.parent = holder;
+    } else if (art.kind === 'chart') {
+      const frame = CreateBox('chartFrame', { width: 2.75, height: 2.1, depth: 0.08 }, scene);
+      frame.position.y = 1.75;
+      add(frame, WOOD_DARK, {}, holder);
+      const board = CreatePlane('baybayinChart', { width: 2.55, height: 1.9 }, scene);
+      board.position.set(0, 1.75, -0.05);
+      board.material = texMat('baybayinChartMat', baybayinChartTexture(scene), { glow: 0.45 });
+      board.parent = holder;
     } else if (art.kind === 'banner') {
       const pole = CreateCylinder('pole', { height: 1.4, diameter: 0.06 }, scene);
       pole.rotation.z = Math.PI / 2;

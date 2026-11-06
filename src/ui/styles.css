@@ -3494,3 +3494,36 @@ body.slowmo .slowmo-tint {
   font: 800 13px var(--font-display);
   letter-spacing: 0.1em;
 }
+
+/* Baybayin study chart (Library wall) */
+.bc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.bc-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px 6px;
+  border-radius: 12px;
+  background: #f6efe0;
+  color: #3a2208;
+  border: 2px solid rgba(242, 193, 78, 0.5);
+}
+.bc-glyph {
+  font: 34px/1.15 'Noto Sans Tagalog', serif;
+}
+.bc-cell b {
+  margin-top: 4px;
+  font: 700 14px/1 var(--font-body);
+  color: #9c3b1f;
+}
+.bc-kudlit {
+  grid-template-columns: repeat(3, minmax(64px, 96px));
+  justify-content: center;
+}
+.bc-icon {
+  font-family: 'Noto Sans Tagalog', serif;
+}

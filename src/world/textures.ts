@@ -1,6 +1,7 @@
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import type { Scene } from '@babylonjs/core/scene';
+import { BAYBAYIN_CHART } from '../data/baybayinChart';
 
 /** Procedurally painted canvas textures — no external image files needed. */
 
@@ -308,5 +309,51 @@ export function photoTexture(scene: Scene, url: string): Texture {
   t.wrapU = Texture.CLAMP_ADDRESSMODE;
   t.wrapV = Texture.CLAMP_ADDRESSMODE;
   t.anisotropicFilteringLevel = 4;
+  return t;
+}
+
+/**
+ * The Library's baybayin study chart: every character + its sound on aged paper. Redrawn once the
+ * bundled Noto Sans Tagalog font has loaded (canvas text can't wait for a webfont by itself).
+ */
+export function baybayinChartTexture(scene: Scene): DynamicTexture {
+  const W = 512;
+  const H = 384;
+  const draw = (ctx: CanvasRenderingContext2D): void => {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#f6ead0');
+    g.addColorStop(1, '#e6d2a8');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#8a5a2b';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(8, 8, W - 16, H - 16);
+    ctx.fillStyle = '#5b3a22';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 34px sans-serif';
+    ctx.fillText('BAYBAYIN', W / 2, 42);
+    const cols = 6;
+    const cw = (W - 40) / cols;
+    const rh = 92;
+    BAYBAYIN_CHART.glyphs.forEach((b, i) => {
+      const cx = 20 + cw * (i % cols) + cw / 2;
+      const cy = 112 + rh * Math.floor(i / cols);
+      ctx.fillStyle = '#3a2208';
+      ctx.font = "44px 'Noto Sans Tagalog', serif";
+      ctx.fillText(b.glyph, cx, cy);
+      ctx.fillStyle = '#9c3b1f';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(b.sound, cx, cy + 36);
+    });
+  };
+  const t = tex(scene, 'baybayinChart', W, H, draw);
+  document.fonts?.load("44px 'Noto Sans Tagalog'", 'ᜊ').then(
+    () => {
+      draw(t.getContext() as unknown as CanvasRenderingContext2D);
+      t.update(true);
+    },
+    () => undefined,
+  );
   return t;
 }

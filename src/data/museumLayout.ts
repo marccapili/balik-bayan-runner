@@ -60,7 +60,7 @@ export interface WallSeg {
 }
 
 export interface WallArt {
-  kind: 'portrait' | 'banner' | 'capiz' | 'painting';
+  kind: 'portrait' | 'banner' | 'capiz' | 'painting' | 'chart';
   x: number;
   z: number;
   /** Facing direction in radians (0 = faces +z). */
@@ -252,7 +252,8 @@ export const WALL_ART: WallArt[] = [
   { kind: 'capiz', x: -29.65, z: -12, rotY: -Math.PI / 2, variant: 0 },
   { kind: 'capiz', x: -9.65, z: -4, rotY: -Math.PI / 2, variant: 0 },
   { kind: 'capiz', x: 9.65, z: -4, rotY: Math.PI / 2, variant: 0 },
-  { kind: 'capiz', x: -20, z: 23.65, rotY: 0, variant: 0 },
+  // Baybayin study chart in the Library (see data/baybayinChart.ts).
+  { kind: 'chart', x: -20, z: 23.65, rotY: 0, variant: 0 },
 ];
 
 /** Props that block movement. Small decorative items could opt out later. */
