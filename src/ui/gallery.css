@@ -302,6 +302,8 @@
   overflow: hidden;
   background: #fbf5e6;
   display: grid;
+  /* A fixed 100% track: with auto tracks a tall image sets its own height and gets cut off. */
+  grid-template: 100% / 100%;
   place-items: center;
 }
 .gv-page img,
