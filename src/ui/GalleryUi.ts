@@ -174,12 +174,11 @@ export class GalleryUi {
     const stage = $(this.overlay, '.gv-stage');
     const W = Math.max(200, stage.clientWidth - 24);
     const H = Math.max(200, stage.clientHeight - 16);
-    const first = b.work.pages[0]!;
-    const twoUp = b.work.pages.length > 1 && W > 640 && W / H > (first.w / first.h) * 1.45;
+    // The page takes the shape of the work's tallest page (owner: the book should match the size of
+    // a portrait description page), so text pages fill the page and wider drawings sit inside it.
+    const aspect = Math.min(...b.work.pages.map((p) => p.w / p.h));
+    const twoUp = b.work.pages.length > 1 && W > 640 && W / H > aspect * 1.45;
     const cols = twoUp ? 2 : 1;
-    // One page at a time (phones): size the page to the tallest page, so a portrait text page after
-    // a landscape drawing shows whole instead of being squeezed into the drawing's shape.
-    const aspect = twoUp ? first.w / first.h : Math.min(...b.work.pages.map((p) => p.w / p.h));
     let pw = Math.min(W / cols, H * aspect);
     let ph = pw / aspect;
     if (ph > H) {
