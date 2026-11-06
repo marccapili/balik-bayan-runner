@@ -45,14 +45,16 @@ export class StateMachine<S extends string> {
 
 /**
  * Top-level game flow: boot → lore (opening cutscene, skippable) → lobby → intro (cinematic) →
- * playing ⇄ paused | reading → gameover → intro | lobby. The lobby can replay the lore.
+ * playing ⇄ paused | reading → gameover → intro | lobby. The lobby can replay the lore or open the gallery.
  */
-export type GameState = 'boot' | 'lore' | 'lobby' | 'intro' | 'playing' | 'paused' | 'reading' | 'gameover';
+export type GameState = 'boot' | 'lore' | 'lobby' | 'intro' | 'playing' | 'paused' | 'reading' | 'gameover' | 'gallery';
 
 export const GAME_TRANSITIONS: Readonly<Record<GameState, readonly GameState[]>> = {
   boot: ['lobby', 'playing', 'lore'],
   lore: ['lobby'],
-  lobby: ['intro', 'playing', 'lore'],
+  lobby: ['intro', 'playing', 'lore', 'gallery'],
+  /** Future Heroes Gallery: the class's works in their own calm room (no run). */
+  gallery: ['lobby'],
   intro: ['playing', 'lobby'],
   playing: ['paused', 'reading', 'gameover', 'lobby'],
   /** Exhibit panel open: the run is frozen exactly like pause. */
