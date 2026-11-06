@@ -35,6 +35,8 @@ const work = (slug: string, name: string, sortName: string, title: string, form:
 };
 
 export const GALLERY_WORKS: readonly GalleryWork[] = [
+  work('acuna', 'Shailoh Acuña', 'Acuna', 'Ang Aking Ambag', 'Guhit at paliwanag'),
+  work('amargo', 'Miguel Franco Amargo', 'Amargo', 'Pag-Ibig Na Wagas', 'Tula'),
   work('casantusan', 'JD Casantusan', 'Casantusan', 'Sa Likod ng Manibela', 'Magazine'),
   work('diaz', 'Jan Marchielle J. Diaz', 'Diaz', 'Jeepney Phaseout', 'Poster at paliwanag'),
   work('esguerra', 'Nathaniel Angela B. Esguerra', 'Esguerra', 'Banga ng Pagbabago', 'Ilustrasyon at paliwanag'),

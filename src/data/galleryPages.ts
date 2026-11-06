@@ -2,6 +2,22 @@
 import type { GalleryPage } from './gallery';
 
 export const GALLERY_PAGES: Record<string, GalleryPage[]> = {
+  "acuna": [
+    {
+      "type": "image",
+      "src": "p01.webp",
+      "w": 1237,
+      "h": 1600
+    }
+  ],
+  "amargo": [
+    {
+      "type": "image",
+      "src": "p01.webp",
+      "w": 1132,
+      "h": 1600
+    }
+  ],
   "casantusan": [
     {
       "type": "image",

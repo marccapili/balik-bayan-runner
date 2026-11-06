@@ -612,12 +612,15 @@ export class Game {
         this.pushStats();
       } else if (interact && near) {
         this.interactExhibit(near);
+      } else if (interact && this.museum.nearChart) {
+        this.openChart();
       } else {
         this.simTime += dt;
         this.museum.update(dt);
         this.pushStats();
         const n = this.museum.nearExhibit;
-        this.hud?.setExhibitPrompt(n, n ? this.promptMode(n) : 'new');
+        if (!n && this.museum.nearChart) this.hud?.setChartPrompt();
+        else this.hud?.setExhibitPrompt(n, n ? this.promptMode(n) : 'new');
       }
     } else if (state === 'reading') {
       // Frozen run (like pause): E / Esc / the button closes the panel.
@@ -758,6 +761,15 @@ export class Game {
     this.sfx.play(pay?.diamonds ? 'claim' : 'page');
     this.pushStats();
     this.lobby?.refresh();
+  }
+
+  /** The Library's baybayin chart: a study sheet, run fully frozen (owner: freeze, not slow-mo). */
+  private openChart(): void {
+    if (!this.museum || !this.fsm.transition('reading')) return;
+    this.input.releaseAll();
+    this.hud?.setExhibitPrompt(null);
+    this.hud?.showChart();
+    this.sfx.play('page');
   }
 
   /** Distance to the closest enemy that can hurt the hero right now. */

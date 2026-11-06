@@ -1,3 +1,4 @@
+import { BAYBAYIN_CHART } from '../data/baybayinChart';
 import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
 import { gadgetIconUrl } from './gadgetArt';
 import type { Exhibit } from '../data/exhibits';
@@ -69,6 +70,9 @@ const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
 export { formatTime };
 
 /** HTML overlay for the in-run HUD, pause menu and results. Every button here does something. */
+/** In-run buttons that must work while another finger holds the joystick (multi-touch). */
+const TOUCH_DOWN_ACTS = new Set(['ability', 'gadget', 'interact', 'drop', 'pause']);
+
 export class Hud {
   private readonly root: HTMLElement;
   private readonly roomToast: HTMLElement;
@@ -207,8 +211,29 @@ export class Hud {
     this.exPrompt = $(this.root, '.exhibit-prompt');
     this.exPanel = $(this.root, '.exhibit-panel');
 
+    // Touch: in-run buttons fire on pointerdown. Phones send no `click` for a second finger while
+    // the joystick thumb is down, so waiting for click made skill / gadget / interact dead mid-run.
+    let touchFired = '';
+    let touchFiredAt = 0;
+    this.root.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
+      if (!act || !TOUCH_DOWN_ACTS.has(act)) return;
+      e.preventDefault();
+      touchFired = act;
+      touchFiredAt = performance.now();
+      run(act);
+    });
     this.root.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
+      // The click that trails a touch already handled on pointerdown.
+      if (act && act === touchFired && performance.now() - touchFiredAt < 800) {
+        touchFired = '';
+        return;
+      }
+      if (act) run(act);
+    });
+    const run = (act: string): void => {
       if (act === 'pause') cb.onPause();
       else if (act === 'resume') cb.onResume();
       else if (act === 'restart') cb.onRestart();
@@ -222,7 +247,7 @@ export class Hud {
       else if (act === 'mute') cb.onToggleMute();
       else if (act === 'interact') cb.onInteract();
       else if (act === 'closeExhibit') cb.onCloseExhibit();
-    });
+    };
     // A tap anywhere on the objective card closes it (not only the button).
     $(this.root, '.objective').addEventListener('pointerdown', (e) => {
       if (!(e.target as HTMLElement).closest('[data-act]')) cb.onObjectiveOk();
@@ -318,6 +343,18 @@ export class Hud {
     $(this.exPrompt, '.ep-title').innerHTML = `${esc(e.title)}${mode === 'cleared' ? ' · ✓ cleared' : ''}`;
   }
 
+  /** Prompt at the Library's baybayin chart (reuses the exhibit prompt chip). */
+  setChartPrompt(): void {
+    if (this.exPromptId === 'chart') return;
+    this.exPromptId = 'chart';
+    this.exPrompt.hidden = false;
+    this.exPrompt.dataset.kind = 'artifact';
+    this.exPrompt.dataset.mode = 'chart';
+    $(this.exPrompt, '.ep-icon').textContent = BAYBAYIN_CHART.icon;
+    $(this.exPrompt, '.ep-action').innerHTML = '<span class="hint-desktop"><b>E</b> · </span>Pag-aralan ang chart 📜';
+    $(this.exPrompt, '.ep-title').textContent = `${BAYBAYIN_CHART.title} · para sa Baybayin exhibit`;
+  }
+
   /** Exhibit Mode counter (or the Endless badge) + Curator ID chip. */
   setExhibitProgress(cleared: number, total: number, endless: boolean, hasId: boolean): void {
     const key = `${cleared}|${total}|${endless}|${hasId}`;
@@ -361,6 +398,23 @@ export class Hud {
     ].join('');
     $(this.exPanel, '.ex-status').innerHTML = status;
     $(this.exPanel, '.ex-body').innerHTML = exhibitHtml(e);
+    this.exPanel.hidden = false;
+    $(this.exPanel, '.ex-body').scrollTop = 0;
+    $(this.exPanel, '[data-act="closeExhibit"]').focus();
+  }
+
+  /** The baybayin study chart in the exhibit panel (the run is frozen in `reading`). */
+  showChart(): void {
+    const c = BAYBAYIN_CHART;
+    const cell = (g: { glyph: string; sound: string }): string => `<div class="bc-cell"><span class="bc-glyph">${g.glyph}</span><b>${esc(g.sound)}</b></div>`;
+    $(this.exPanel, '.ex-status').innerHTML = '<span class="ex-chip">⏸ Naka-freeze ang laro habang nag-aaral</span>';
+    $(this.exPanel, '.ex-body').innerHTML = `<article class="exhibit bchart" data-kind="artifact">
+      <header class="ex-head"><div class="ex-icon bc-icon" aria-hidden="true">${c.icon}</div>
+        <div><span class="ex-kind">📜 Study chart</span><h2>${esc(c.title)}</h2><p class="ex-era">Kabisaduhin bago ang Baybayin Match!</p></div></header>
+      <div class="bc-grid">${c.glyphs.map(cell).join('')}</div>
+      <p class="ex-p">${esc(c.note)}</p>
+      <div class="bc-grid bc-kudlit">${c.kudlit.map(cell).join('')}</div>
+    </article>`;
     this.exPanel.hidden = false;
     $(this.exPanel, '.ex-body').scrollTop = 0;
     $(this.exPanel, '[data-act="closeExhibit"]').focus();
