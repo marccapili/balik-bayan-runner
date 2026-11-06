@@ -56,9 +56,10 @@ SOURCES = {
 }
 
 # Tall pages to cut into separate book pages, as fractions of the page height (owner, 2026-11-06:
-# Esguerra's explanation was too small to read under the drawing, so it gets its own page).
+# Esguerra's explanation was too small to read under the drawing, so it gets its own page; the drawing
+# above it repeats page 1, so only the text part is kept).
 SPLITS = {
-    ('esguerra', 2): [(0.0, 0.356), (0.359, 0.966)],
+    ('esguerra', 2): [(0.359, 0.966)],
 }
 
 
