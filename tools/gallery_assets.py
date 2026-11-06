@@ -28,6 +28,8 @@ QUALITY = 80
 
 # slug -> ordered list of source files (relative to the submission folder). PDFs expand to all their pages.
 SOURCES = {
+    'acuna': ['Acuña_Babasahin_Finals.pdf'],  # sent in the project chat 2026-11-06
+    'amargo': ['Amargo_Babasahin Finals.pdf'],  # sent in the project chat 2026-11-06
     'casantusan': ['CASANTUSAN_babasahin_finals.pdf'],
     'diaz': ['Diaz_Babasahin_Finals/JEEPNEY PHASEOUT.png', 'Diaz_Babasahin_Finals/PALIWANAG.png'],
     'esguerra': ['ESGUERRA_Nathaniel Angela/ESGUERRA_Ambag_Banga ng pagbabago.png', 'ESGUERRA_Nathaniel Angela/ESGUERRA_Ambag.pdf'],
