@@ -301,3 +301,12 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
+
+/** A real picture (exhibit photo / wall portrait) from public/; loads async, mip-mapped. */
+export function photoTexture(scene: Scene, url: string): Texture {
+  const t = new Texture(url, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  t.wrapU = Texture.CLAMP_ADDRESSMODE;
+  t.wrapV = Texture.CLAMP_ADDRESSMODE;
+  t.anisotropicFilteringLevel = 4;
+  return t;
+}

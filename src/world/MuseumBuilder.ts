@@ -15,7 +15,8 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { PROPS, ROOMS, WALL_ART, WALLS, type Prop, type RoomId } from '../data/museumLayout';
 import type { Aabb } from '../physics/Collision';
 import { mat, type MatOpts } from './materials';
-import { bannerTexture, capizTexture, floorTiles, paintingTexture, portraitTexture, signTexture, sunMedallion } from './textures';
+import { exhibitAsset, exhibitPhoto, WALL_PORTRAITS } from '../data/exhibitPhotos';
+import { bannerTexture, capizTexture, floorTiles, paintingTexture, photoTexture, portraitTexture, signTexture, sunMedallion } from './textures';
 
 export interface MuseumOccluder {
   box: Aabb;
@@ -145,7 +146,8 @@ export function buildMuseum(scene: Scene): MuseumBuild {
       add(frame, GOLD, { glow: 0.3, spec: 0.5 }, holder);
       const pic = CreatePlane('portrait', { width: 1.25, height: 1.6 }, scene);
       pic.position.set(0, 1.7, -0.05);
-      pic.material = texMat(`portraitMat${art.variant}`, portraitTexture(scene, art.variant), { glow: 0.3 });
+      const face = WALL_PORTRAITS[art.variant];
+      pic.material = texMat(`portraitMat${art.variant}`, face ? photoTexture(scene, exhibitAsset(face)) : portraitTexture(scene, art.variant), { glow: face ? 0.55 : 0.3 });
       pic.parent = holder;
     } else if (art.kind === 'painting') {
       const frame = CreateBox('pframe', { width: 3.7, height: 2.05, depth: 0.1 }, scene);
@@ -153,7 +155,8 @@ export function buildMuseum(scene: Scene): MuseumBuild {
       add(frame, GOLD, { glow: 0.3, spec: 0.5 }, holder);
       const pic = CreatePlane('painting', { width: 3.45, height: 1.8 }, scene);
       pic.position.set(0, 1.65, -0.06);
-      pic.material = texMat('paintingMat', paintingTexture(scene), { glow: 0.35 });
+      const spol = exhibitPhoto('spoliarium');
+      pic.material = texMat('paintingMat', spol ? photoTexture(scene, exhibitAsset(spol.file)) : paintingTexture(scene), { glow: spol ? 0.55 : 0.35 });
       pic.parent = holder;
     } else if (art.kind === 'banner') {
       const pole = CreateCylinder('pole', { height: 1.4, diameter: 0.06 }, scene);
