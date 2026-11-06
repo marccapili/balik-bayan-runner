@@ -31,6 +31,12 @@ export interface HeroModelDef {
   handBottom: number;
   /** Extra brightness on top of the scene lights (the textures carry baked shading). */
   emissive: number;
+  /**
+   * Body midline in normalised x (fraction of height) when the model is not centred on it, e.g.
+   * long hair swept to one side widens the bounding box. The mesh is shifted so the body sits on
+   * the rig's centre before skinning.
+   */
+  centerX?: number;
   /** Max arm swing in radians before the sculpt visibly stretches (hands fused to a coat need less). */
   armLimit: number;
 }
@@ -61,5 +67,19 @@ export const HERO_MODELS: Partial<Record<HeroId, HeroModelDef>> = {
     handBottom: 0.09,
     emissive: 0.35,
     armLimit: 0.85,
+  },
+  lapulapu: {
+    url: 'models/lapulapu.glb',
+    height: 1.7,
+    centerX: -0.045,
+    crotch: 0.13,
+    hip: 0.2,
+    waist: 0.3,
+    neck: 0.5,
+    shoulder: { y: 0.41, x: 0.19 },
+    armInner: { top: 0.155, bottom: 0.185 },
+    handBottom: 0.16,
+    emissive: 0.35,
+    armLimit: 1.2,
   },
 };

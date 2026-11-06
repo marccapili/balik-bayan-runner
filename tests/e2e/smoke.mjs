@@ -274,12 +274,14 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
     l.setHero('rizal');
     const rizal = l.rig.meshes.map((m) => m.name);
     l.setHero('lapulapu');
-    const lapu = l.rig.meshes.length;
+    const lapu = l.rig.meshes.map((m) => m.name);
+    l.setHero('gabriela');
+    const gab = l.rig.meshes.length;
     l.setHero(window.__bbr.heroId);
-    return { boni, rizal, lapu };
+    return { boni, rizal, lapu, gab };
   });
-  check('Bonifacio + Rizal use the sculpted 3D models', glb.boni.join() === 'bonifacio_glb' && glb.rizal.join() === 'rizal_glb', JSON.stringify(glb));
-  check('heroes without a model keep the procedural look', glb.lapu > 20, `lapu-lapu meshes ${glb.lapu}`);
+  check('Bonifacio, Rizal + Lapu-Lapu use the sculpted 3D models', glb.boni.join() === 'bonifacio_glb' && glb.rizal.join() === 'rizal_glb' && glb.lapu.join() === 'lapulapu_glb', JSON.stringify(glb));
+  check('heroes without a model keep the procedural look', glb.gab > 20, `gabriela meshes ${glb.gab}`);
   await page.screenshot({ path: `${OUT}/m3-lobby.png` });
 
   for (const panel of ['leaderboard', 'settings', 'profile', 'missions', 'daily', 'archive']) {
@@ -374,6 +376,17 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   check('hero lands, then the guard reacts', nt.introPhase === 'notice' || nt.state === 'playing');
   const pl = await until((s) => s.state === 'playing', 20000);
   check('chase + timer start after the intro', pl.state === 'playing' && pl.guards.length >= 1 && ['alert', 'chase'].includes(pl.guards[0].state), JSON.stringify(pl.guards));
+  const ob = await until((s) => s.objective, 3000);
+  check('the objective card pops up as the first guard starts chasing, in slow motion', ob.objective && ob.slowMo && /15 exhibits/.test(await page.textContent('.objective')));
+  await wait(400);
+  await page.screenshot({ path: `${OUT}/objective.png` });
+  const t0 = (await snap(page)).runTime;
+  await wait(1000);
+  const t1 = (await snap(page)).runTime;
+  check('the world crawls while the objective card is open', t1 - t0 < 0.35, `${(t1 - t0).toFixed(2)} s of run time in 1 s`);
+  await page.keyboard.press('Enter');
+  const oc = await until((s) => !s.objective, 3000);
+  check('any key closes the objective card, full speed again', !oc.objective && !oc.slowMo);
   const later = await until((s) => s.runTime > 0.5, 10000);
   check('run timer ticks once playing', later.runTime > 0.5);
 
@@ -681,7 +694,8 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   const g0 = (await snap(page)).guards;
   await wait(1500);
   const g1 = (await snap(page)).guards;
-  check('enemies keep moving during a mini-game', g1.some((g, i) => g0[i] && Math.hypot(g.x - g0[i].x, g.z - g0[i].z) > 0.05));
+  check('enemies keep moving during a mini-game (in slow motion)', g1.some((g, i) => g0[i] && Math.hypot(g.x - g0[i].x, g.z - g0[i].z) > 0.02));
+  check('the world is in slow motion during a mini-game (time-freeze tint on)', (await snap(page)).slowMo && (await page.evaluate(() => document.body.classList.contains('slowmo'))));
   const before = await snap(page);
   await page.evaluate(() => window.__bbr.debug.winMiniGame());
   const open = await until((s) => s.state === 'reading', 6000);
@@ -1007,19 +1021,20 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   check('lore: the painted intro video is playing and the overlay follows its clock', s.lore?.video > 0.5 && Math.abs(s.lore.video - s.lore.time) < 0.5, JSON.stringify(s.lore));
   check('lore: after the tap the intro plays with its baked-in sound (not muted)', s.lore?.sound === true, JSON.stringify(s.lore));
   for (const [t, name] of [
-    [1.2, 'title'],
-    [6.6, 'mactan'],
-    [10.0, 'mactan-sip'],
-    [16.3, 'ilocos'],
-    [23.2, 'dapitan'],
-    [32.0, 'manila'],
-    [38.4, 'tunnel'],
-    [42.5, 'museum'],
-    [45.0, 'museum-portraits'],
-    [48.1, 'guard'],
-    [50.4, 'takbo'],
-    [53.6, 'logo'],
-    [55.2, 'logo-portal'],
+    [1.6, 'credits'],
+    [4.2, 'title'],
+    [9.6, 'mactan'],
+    [13.0, 'mactan-sip'],
+    [19.3, 'ilocos'],
+    [26.2, 'dapitan'],
+    [35.0, 'manila'],
+    [41.4, 'tunnel'],
+    [45.5, 'museum'],
+    [48.0, 'museum-portraits'],
+    [51.1, 'guard'],
+    [53.4, 'takbo'],
+    [56.6, 'logo'],
+    [58.2, 'logo-portal'],
   ]) {
     await page.evaluate((t) => window.__bbr.debug.loreSeek(t), t);
     await wait(900);
@@ -1028,7 +1043,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   s = await snap(page);
   check('lore: seeking walks every scene up to the logo', s.lore?.scene === 'logo');
   // A tap on the picture only wakes the Skip chip.
-  await page.evaluate(() => window.__bbr.debug.loreSeek(20));
+  await page.evaluate(() => window.__bbr.debug.loreSeek(23));
   await page.mouse.click(640, 360);
   await wait(300);
   check('lore: tapping the picture does not skip', (await snap(page)).state === 'lore');
@@ -1043,7 +1058,7 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await page.click('.lobby [data-act="replayLore"]');
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
   check('lore: Settings → Panoorin ulit ang intro replays it from the start', (await snap(page)).lore?.time < 5);
-  await page.evaluate(() => window.__bbr.debug.loreSeek(56.1));
+  await page.evaluate(() => window.__bbr.debug.loreSeek(59.1));
   const t1 = Date.now();
   while ((await snap(page)).state !== 'lobby' && Date.now() - t1 < 20000) await wait(100);
   check('lore: the intro ends by itself into the lobby', (await snap(page)).state === 'lobby');
@@ -1061,11 +1076,11 @@ for (const [label, viewport] of [['phone-landscape', { width: 844, height: 390 }
   await page.tap('#load-start', { force: true });
   await page.waitForFunction(() => window.__bbr?.fsm.state === 'lore', null, { timeout: 30000 });
   for (const [t, name] of [
-    [6.6, 'phone-mactan'],
-    [16.3, 'phone-ilocos'],
-    [38.4, 'phone-tunnel'],
-    [48.1, 'phone-guard'],
-    [53.6, 'phone-logo'],
+    [9.6, 'phone-mactan'],
+    [19.3, 'phone-ilocos'],
+    [41.4, 'phone-tunnel'],
+    [51.1, 'phone-guard'],
+    [56.6, 'phone-logo'],
   ]) {
     await page.evaluate((t) => window.__bbr.debug.loreSeek(t), t);
     await wait(900);

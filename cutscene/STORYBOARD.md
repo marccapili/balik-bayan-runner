@@ -1,6 +1,6 @@
 # Balik Bayan Runner — opening (2D, hand-painted)
 
-56.5 s, 16:9, 24 fps. The Taglish speech bubbles, narrator line, era cards, tunnel years and the title are
+59.5 s, 16:9, 24 fps: a 3 s credits card, then the film (every shot time below is film time; add 3 s for video time). The Taglish speech bubbles, narrator line, era cards, tunnel years and the title are
 painted in (`src/scenes/captions.js`, texts and times in `src/scenes/lines.js`, which must match the game's
 `src/data/lore.ts`: a unit test checks). Keep the main action inside the centre ~1200 px so the
 phone-portrait crop still reads.
@@ -18,7 +18,7 @@ Then make the soundtrack (original score, SFX and chibi voice blips, all synthes
 the two web versions into `../public/lore/` (1280×720, with that sound):
 
 ```
-python3 sound/score.py out/intro.wav
+python3 sound/score.py out/intro.wav      # credits sting at 0–3 s, the film's sound shifted by OFF = 3 s
 ffmpeg -i out/intro.mp4 -i out/intro.wav -map 0:v -map 1:a -vf scale=1280:720 -c:v libvpx-vp9 -b:v 0 -crf 40 -row-mt 1 -c:a libopus -b:a 96k -shortest ../public/lore/intro.webm
 ffmpeg -i out/intro.mp4 -i out/intro.wav -map 0:v -map 1:a -vf scale=1280:720 -c:v libx264 -crf 26 -preset slow -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -movflags +faststart ../public/lore/intro.mp4
 ```
@@ -30,6 +30,7 @@ Watercolour `fill` is off for this film (`bayani.js` turns fills into flat washe
 
 | # | Shot | Time | Reads (one at a time) |
 |---|------|------|------------------------|
+| C | Credits | −3–0 | A gold museum frame: "Created by Marc Reiven Capili and Anne Marielle Dillena" types on with sparkles, fades to black |
 | 0 | Title: museum at night | 0–4 | Four empty gold frames → narrator "May nawawalang mga bayani…" → a crack of light tears open in the air → flash, wipe |
 | 1 | Mactan 1521 | 4–12 | Lapu-Lapu stands proud at sunset → a portal pops open over the sea (take!) → "Ano 'tong ilaw sa dagat?!" (confused) → he creeps up and pokes it (suspicious) → it INHALES: hair whips, feet slide (scared) → sipped, spinning → portal burps shut |
 | 2 | Ilocos 1763 | 12–20 | Gabriela gallops in, determined → portal opens on the road → the horse skids, she is flung over its head → lands on her bottom by the portal (dizzy) → "Ano ito?" → sipped → the horse, alone: "?" then a sad sweat drop |

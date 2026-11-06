@@ -14,7 +14,9 @@ from pathlib import Path
 import numpy as np
 
 SR = 48000
-DUR = 56.5
+# The film starts after a 3 s credits card: every film time below is shifted by OFF; the credits use -3..0.
+OFF = 3.0
+DUR = 56.5 + OFF
 N = int(SR * DUR)
 rng = np.random.default_rng(7)
 MUS = np.zeros((2, N))   # music bus
@@ -36,7 +38,7 @@ def mix(*xs):
 
 def put(bus, start, sig, gain=1.0, pan=0.0):
     """Mixes mono `sig` into a stereo bus at `start` seconds, equal-power pan (-1 left .. 1 right)."""
-    i = int(start * SR)
+    i = int((start + OFF) * SR)
     if i >= N or len(sig) == 0:
         return
     if i < 0:
@@ -546,7 +548,7 @@ def voices():
     film = json.loads(js.replace("'", '’'))
     for s in film['scenes']:
         for i, (a, b, who, text) in enumerate(s['lines']):
-            babble(s['start'] + a + 0.15, s['start'] + b, who, text, sum(map(ord, text)) % 1000 + i)
+            babble(s['start'] - OFF + a + 0.15, s['start'] - OFF + b, who, text, sum(map(ord, text)) % 1000 + i)
 
 
 def reverb(x, seconds=1.6, mix=0.18):
@@ -560,7 +562,19 @@ def reverb(x, seconds=1.6, mix=0.18):
     return x + y * mix * np.max(np.abs(x))
 
 
+def credits():
+    """-3..0: the credits card. A soft gong, a rising bell arpeggio as the names type on, a sparkle, then hush."""
+    put(MUS, -2.95, big_gong(mtof(45), 3.0), 0.35)
+    put(MUS, -2.9, pad(mtof(57), 2.6, 0.5, 700), 0.25, -0.3)
+    put(MUS, -2.9, pad(mtof(64), 2.6, 0.5, 800), 0.18, 0.3)
+    for i, d in enumerate([0, 2, 4, 7, 9, 7]):
+        put(MUS, -2.5 + i * 0.28, bell(mtof(deg(69, d)), 1.1), 0.22, -0.4 + i * 0.16)
+    put(FX, -2.45, sparkle(1.2), 0.25)
+    put(FX, -1.9, sparkle(1.0), 0.2, 0.3)
+
+
 def main(out):
+    credits()
     compose()
     effects()
     voices()

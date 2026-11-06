@@ -30,6 +30,7 @@ def lines():
 
 
 def reset():
+    S.OFF = 0.0
     S.N = int(S.SR * LEN)
     S.MUS = np.zeros((2, S.N))
     S.FX = np.zeros((2, S.N))

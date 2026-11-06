@@ -6,7 +6,7 @@ import { HERO_CLIP, HERO_CLIPS, heroClipSources } from '../data/heroClips';
 import { ClipPlayer } from '../ui/ClipPlayer';
 import { LoreTimeline, type LoreEvent } from '../gameplay/LoreTimeline';
 import type { LorePlayer } from '../ui/LorePlayer';
-import { TIPS, TIP_LOCKED_SUFFIX } from '../data/tutorial';
+import { OBJECTIVE, TIPS, TIP_LOCKED_SUFFIX } from '../data/tutorial';
 import { Tutorial } from '../gameplay/Tutorial';
 import { Music } from '../audio/Music';
 import { Engine } from '@babylonjs/core/Engines/engine';
@@ -154,6 +154,7 @@ export class Game {
       onAbility: () => this.input.press('ability'),
       onGadget: () => this.input.press('gadget'),
       onTipOk: () => this.tutorial?.dismiss(),
+      onObjectiveOk: () => this.closeObjective(),
       onToggleMute: () => this.toggleMute(),
       onInteract: () => this.input.press('interact'),
       onCloseExhibit: () => this.closeExhibit(),
@@ -472,6 +473,7 @@ export class Game {
     this.defeatLeft = 0;
     this.hud?.hideResults();
     this.hud?.setPaused(false);
+    this.hud?.showObjective(null);
     this.hud?.setMode('intro');
     this.museum.startIntro();
     this.startTutorial();
@@ -538,6 +540,7 @@ export class Game {
     await this.transition?.cover();
     this.fsm.transition('lobby');
     this.closeMini();
+    this.hud?.showObjective(null);
     this.defeatLeft = 0;
     this.hud?.hideResults();
     this.hud?.setPaused(false);
@@ -577,6 +580,13 @@ export class Game {
       const drop = this.dropRequested || this.input.consume('confirm') || this.input.consume('ability') || Math.hypot(mv.x, mv.z) > 0.5;
       this.dropRequested = false;
       for (const e of this.museum.updateIntro(dt, drop)) this.onIntroEvent(e);
+    } else if (state === 'playing' && this.museum && this.hud?.objectiveOpen) {
+      // Objective card: the world crawls in slow motion; any key closes it (a tap is handled by the HUD).
+      const closeKey = interact || this.input.consume('confirm') || this.input.consume('ability') || this.input.consume('gadget');
+      this.simTime += dt * OBJECTIVE.worldSlow;
+      this.museum.update(dt * OBJECTIVE.worldSlow, true);
+      this.pushStats();
+      if (closeKey) this.closeObjective();
     } else if (state === 'playing' && this.museum) {
       if (this.input.consume('ability') && !this.museum.useAbility()) {
         this.sfx.play('denied');
@@ -593,9 +603,10 @@ export class Game {
       const mini = this.mini;
       const near = this.museum.nearExhibit;
       if (mini?.active) {
-        // The world keeps going while the hero is busy: enemies can sneak up (owner: yes).
-        this.simTime += dt;
-        this.museum.update(dt, true);
+        // The world keeps going while the hero is busy, but in slow motion (owner: like the Time Freeze),
+        // so enemies can still sneak up without the mini-game being a race.
+        this.simTime += dt * MINIGAME.worldSlow;
+        this.museum.update(dt * MINIGAME.worldSlow, true);
         mini.update(dt);
         mini.setDanger(this.nearestEnemy() < MINIGAME.dangerRange);
         this.pushStats();
@@ -617,7 +628,9 @@ export class Game {
       this.defeatLeft -= dt;
       if (this.defeatLeft <= 0) this.showResults();
     }
-    if (state === 'playing') this.updateTutorial(dt);
+    // Slow motion (mini-game or the objective card): a cold time-freeze tint over the screen.
+    document.body.classList.toggle('slowmo', this.slowMo);
+    if (state === 'playing' && !this.hud?.objectiveOpen) this.updateTutorial(dt);
     else if (state !== 'paused' && state !== 'reading') this.hud?.showTip(null);
     this.updateMusic(state);
     this.hud?.tickFps(dt);
@@ -640,7 +653,12 @@ export class Game {
     const enemies = run.training ? 0 : run.guards.length;
     const intensity = run.endless ? 1 : Math.min(0.84, enemies / MUSIC.fullIntensityEnemies);
     const duck = state === 'paused' || state === 'reading' ? MUSIC.duckPaused : this.mini?.active ? MUSIC.duckMini : 1;
-    this.music.set('museum', intensity, duck, run.endless ? MUSIC.endlessTempo : 1);
+    this.music.set('museum', intensity, duck, (run.endless ? MUSIC.endlessTempo : 1) * (this.slowMo ? MUSIC.slowMoTempo : 1));
+  }
+
+  /** True while the world runs in slow motion (an exhibit mini-game or the objective card). */
+  private get slowMo(): boolean {
+    return this.fsm.state === 'playing' && (!!this.mini?.active || !!this.hud?.objectiveOpen);
   }
 
   private onIntroEvent(e: IntroEvent): void {
@@ -662,11 +680,28 @@ export class Game {
         if (this.fsm.transition('playing')) {
           this.hud?.setMode('play');
           this.pushStats();
+          this.openObjective();
         }
         break;
       default:
         break;
     }
+  }
+
+  /** The first guard is on you: the world slows and the run's objective pops up (once per run). */
+  private openObjective(): void {
+    const run = this.museum?.run;
+    if (!run || run.training || !this.hud) return;
+    this.hud.showObjective({ ...OBJECTIVE, cleared: run.cleared, total: run.exhibitTotal });
+    this.sfx.play('page');
+    this.input.releaseAll();
+  }
+
+  private closeObjective(): void {
+    if (!this.hud?.objectiveOpen) return;
+    this.hud.showObjective(null);
+    this.sfx.play('click');
+    this.input.releaseAll();
   }
 
   private promptMode(e: Exhibit): PromptMode {
@@ -744,6 +779,8 @@ export class Game {
   }
 
   pause(): void {
+    // Pausing over the objective card closes it first, so the pause menu is never hidden under it.
+    if (this.fsm.state === 'playing') this.closeObjective();
     if (this.fsm.transition('paused')) {
       this.input.releaseAll();
       this.hud?.setPaused(true);
@@ -1084,6 +1121,8 @@ export class Game {
       z: p?.position.z,
       speed: p?.motor.speed,
       simTime: this.simTime,
+      objective: !!this.hud?.objectiveOpen,
+      slowMo: this.slowMo,
       abilityEvents: this.abilityEvents,
       fps: this.engine.getFps(),
       drawCalls: (this.engine as unknown as { _drawCalls?: { current: number } })._drawCalls?.current,

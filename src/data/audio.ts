@@ -41,4 +41,6 @@ export const MUSIC = {
   fullIntensityEnemies: 8,
   /** Endless Mode plays a little faster. */
   endlessTempo: 1.08,
+  /** Music drags a little while the world is in slow motion (mini-games, the objective card). */
+  slowMoTempo: 0.8,
 } as const;

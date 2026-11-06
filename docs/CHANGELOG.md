@@ -7,6 +7,15 @@
 - Files: `tools/gallery_assets.py` turns the Drive submission folder into `public/gallery/<slug>/` (WebP pages ≤1600 px, MP4) and writes `src/data/galleryPages.ts`; names/titles in `src/data/gallery.ts`. ~11 MB total, loaded only when opened.
 - Tests: `tests/unit/gallery.test.ts`, `tests/e2e/gallery.mjs` (now part of `npm run test:e2e`).
 
+## Sculpted Lapu-Lapu — 2026-11-05 (owner: "update Lapu-Lapu's visuals", with their GLB)
+- Lapu-Lapu now uses the owner's sculpted model (`public/models/lapulapu.glb`): red putong, long hair, tattoos, bead necklace, round belt buckle, red loincloth, wrist guards, gold earrings, no weapon. It is skinned onto the same rig as Bonifacio and Rizal, so idle, run, ability and lobby poses work unchanged. Skins other than classic keep the procedural model.
+- His hair sweeps to one side, so the model's bounding box is off-centre. A new `centerX` landmark in `data/heroModels.ts` shifts the body onto the rig's midline before skinning.
+
+## Run objective, slow-mo exhibits, intro credits — 2026-11-05 (owner request + Claude's suggestions, approved)
+- **Objective card:** when the first guard starts chasing, the world slows to ¼ speed and a card pops up: "Alamin ang kasaysayan! Hanapin at i-unlock ang lahat ng exhibits…", showing the 🏛 0/15 counter. Any tap, key or the "Game na! ▶" button closes it, and the HUD's exhibit counter pulses so players see where progress lives. It shows on every run (copy in `data/tutorial.ts#OBJECTIVE`). Pausing over it closes it first.
+- **Slow-motion mini-games:** while you play an exhibit's mini-game the world runs at ¼ speed (`MINIGAME.worldSlow`), like the Time Freeze gadget. Enemies still creep closer, the screen gets a cold time-freeze tint, and the music drags (`MUSIC.slowMoTempo`).
+- **Intro credits:** the intro now opens with a 3 s painted card in a gold museum frame, "Created by Marc Reiven Capili and Anne Marielle Dillena", with its own gong-and-bells sting. The intro is now 59.5 s, and every scene moved 3 s later (`data/lore.ts`, `lines.js`, `lore.js` shots, `score.py` OFF).
+
 ## Hero start clips — 2026-11-05 (owner: "make a short cutscene for each hero when the player press the start")
 - PLAY now opens with a 4 s hand-painted clip of the chosen hero, in the intro's style. Each hero bursts in their own way (Lapu-Lapu leaps up, Gabriela skids in, Rizal drops in with his hat landing a beat later, Bonifacio charges in with his bolo) and strikes a pose with a line ("Tara! Laban lang!", "Walang aatras!", "Pag-aralan natin ’to!", "Sugod, mga kapatid!"). A name card with their title slams in, then they dash off and a brush wipe hands over to the portal and the museum.
 - Each clip has its own sound: a motif per hero, a landing hit, voice blips and swooshes. Volume follows the sliders and mute.

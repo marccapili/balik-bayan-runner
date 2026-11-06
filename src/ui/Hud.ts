@@ -15,6 +15,8 @@ export interface HudCallbacks {
   onAbility(): void;
   onGadget(): void;
   onTipOk(): void;
+  /** The objective card was closed (button or a tap anywhere on it). */
+  onObjectiveOk(): void;
   onToggleMute(): void;
   /** Exhibit prompt tapped (same as E). */
   onInteract(): void;
@@ -137,6 +139,16 @@ export class Hud {
       </button>
       <div class="room-toast" aria-live="polite"></div>
       <div class="tip-card" role="status" hidden><span class="tip-icon"></span><span class="tip-text"><b class="tip-title"></b><span class="tip-body"></span></span><button class="tip-ok" data-act="tipOk">Gets! ✓</button></div>
+      <div class="objective" role="dialog" aria-modal="true" aria-labelledby="obj-title" hidden>
+        <div class="obj-card">
+          <div class="obj-kicker"></div>
+          <h2 class="obj-title" id="obj-title"></h2>
+          <p class="obj-body"></p>
+          <div class="obj-count">🏛 <b class="obj-n">0</b>/<span class="obj-t">15</span> exhibits</div>
+          <button class="btn primary obj-go" data-act="objectiveOk"></button>
+        </div>
+      </div>
+      <div class="slowmo-tint" aria-hidden="true"></div>
       <div class="hint">
         <span class="hint-desktop"><b>WASD</b> para tumakbo · <b>Space</b> ability · <b>Q</b> gadget · iwasan ang guard 👮 · <b>Esc</b> pause</span>
         <span class="hint-touch">Drag sa left para tumakbo · tap ang ability ⚡ o gadget 🎒</span>
@@ -206,11 +218,43 @@ export class Hud {
       else if (act === 'ability') cb.onAbility();
       else if (act === 'gadget') cb.onGadget();
       else if (act === 'tipOk') cb.onTipOk();
+      else if (act === 'objectiveOk') cb.onObjectiveOk();
       else if (act === 'mute') cb.onToggleMute();
       else if (act === 'interact') cb.onInteract();
       else if (act === 'closeExhibit') cb.onCloseExhibit();
     });
+    // A tap anywhere on the objective card closes it (not only the button).
+    $(this.root, '.objective').addEventListener('pointerdown', (e) => {
+      if (!(e.target as HTMLElement).closest('[data-act]')) cb.onObjectiveOk();
+    });
     if (new URLSearchParams(location.search).has('debug')) this.fps.hidden = false;
+  }
+
+  /** The run's objective card (null hides it); the exhibit chip pulses as it closes. */
+  showObjective(o: { kicker: string; title: string; body: string; button: string; cleared: number; total: number } | null): void {
+    const el = $(this.root, '.objective');
+    if (!o) {
+      if (!el.hidden) {
+        const chip = $(this.root, '.exp-chip');
+        chip.classList.remove('pulse');
+        void chip.offsetWidth;
+        chip.classList.add('pulse');
+      }
+      el.hidden = true;
+      return;
+    }
+    $(el, '.obj-kicker').textContent = o.kicker;
+    $(el, '.obj-title').textContent = o.title;
+    $(el, '.obj-body').textContent = o.body;
+    $(el, '.obj-n').textContent = String(o.cleared);
+    $(el, '.obj-t').textContent = String(o.total);
+    $(el, '.obj-go').textContent = o.button;
+    el.hidden = false;
+    $<HTMLButtonElement>(el, '.obj-go').focus({ preventScroll: true });
+  }
+
+  get objectiveOpen(): boolean {
+    return !$(this.root, '.objective').hidden;
   }
 
   private tipKey = '';

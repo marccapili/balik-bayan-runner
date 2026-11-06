@@ -88,11 +88,11 @@ describe('LoreTimeline', () => {
 
   it('follows the video clock: syncTo fires what it passes and never runs backwards', () => {
     const tl = new LoreTimeline();
-    const ev = tl.syncTo(4.5);
+    const ev = tl.syncTo(7.5);
     expect(tl.scene.id).toBe('mactan');
     expect(ev.filter((e) => e.type === 'scene')).toHaveLength(2);
     expect(tl.syncTo(1)).toEqual([]);
-    expect(tl.time).toBeCloseTo(4.5, 6);
+    expect(tl.time).toBeCloseTo(7.5, 6);
     expect(tl.syncTo(LORE.duration + 0.2)).toContainEqual({ type: 'end', skipped: false });
     expect(tl.done).toBe(true);
   });

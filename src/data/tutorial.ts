@@ -9,3 +9,16 @@ export const TIPS: Record<TipId, { icon: string; title: string; desktop: string;
 };
 
 export const TIP_LOCKED_SUFFIX = ' 🔒 Bukas ito sa hero Lv 5: mag-level up by playing!';
+
+/**
+ * The run's objective, shown once per run when the first guard starts chasing (the world slows while it is
+ * open; any tap or key closes it). The heroes don't know where they are and must learn the history.
+ */
+export const OBJECTIVE = {
+  kicker: '🏛 MISYON MO',
+  title: 'Alamin ang kasaysayan!',
+  body: 'Hanapin at i-unlock ang lahat ng exhibits sa museum para malaman kung ano ang nangyari sa kasaysayan. Iwasan ang mga guard habang naglalaro!',
+  button: 'Game na! ▶',
+  /** World speed while the card is open. */
+  worldSlow: 0.25,
+} as const;

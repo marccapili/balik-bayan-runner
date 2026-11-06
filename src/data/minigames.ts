@@ -20,6 +20,8 @@ export const MINIGAME_INFO: Record<MiniGameKind, { title: string; how: string; i
 export const MINIGAME = {
   /** Warn the player when an enemy is this close while they play (enemies keep moving). */
   dangerRange: 6,
+  /** The world runs at this × speed while you play a mini-game (owner: "like the time freeze"). */
+  worldSlow: 0.25,
   wires: { min: 3, max: 5 },
   /** Card swipe: must cross this much of the reader in [minSeconds, maxSeconds]. */
   swipe: { travel: 0.82, minSeconds: 0.35, maxSecondsEasy: 1.3, maxSecondsHard: 0.9 },
