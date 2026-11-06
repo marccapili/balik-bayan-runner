@@ -111,7 +111,7 @@ export const GALLERY_PAGES: Record<string, GalleryPage[]> = {
       "type": "image",
       "src": "p02.webp",
       "w": 758,
-      "h": 1600
+      "h": 970
     }
   ],
   "factor": [
