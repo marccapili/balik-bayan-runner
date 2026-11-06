@@ -60,13 +60,13 @@ export const galleryFile = (slug: string, file: string): string => `${import.met
 
 /** The game itself, on its own plaque by the entrance. */
 export const GAME_PLAQUE = {
-  name: 'Reiven Capili',
+  name: 'Marc Reiven Capili at Anne Marielle Dillena',
   title: 'Balik Bayan Runner',
   form: 'Laro (3D browser game)',
   body: [
-    'Isang 3D arcade game kung saan hinihila ng portal sina Rizal, Bonifacio, Lapu-Lapu at Gabriela Silang papunta sa isang museo ng 2026. Para makauwi, kailangan nilang tuklasin ang bawat exhibit habang hinahabol ng mga guard, aso, multo at tikbalang.',
-    'Ang ambag ko: gawing laro ang kasaysayan, para maalala ng mga kabataan ang mahahalagang bahagi nito habang naglalaro. Ang bawat exhibit sa museo ay may totoong kasaysayan at mga pinagkunan (sources).',
-    'At itong gallery na ito ang website ng buong klase: lahat ng ambag ng aking mga kaklase, nasa iisang museo.',
+    'Ang Balik Bayan Runner ay isang 3D arcade game kung saan naglakbay sa panahon ang mga kilalang personalidad sa kasaysayan papunta sa kasalukuyan. Napadpad sila sa isang museo noong taong 2026, at kailangan nilang alamin ang mga pangyayari sa kasaysayan, ngunit may mga guard na nagbabantay sa loob ng museo. Habang tumatagal, lalong humihirap ang laro at dumarami ang mga humahabol, kaya kailangang matutunan ng mga personalidad na ito ang mahahalagang pangyayari sa kasaysayan nang hindi nahuhuli. Kaya takbo, takas, at matuto sa larong Balik Bayan Runner!',
+    'Ang ambag namin: gawing laro ang kasaysayan, para maalala ng mga kabataan at ng bawat manlalaro ang mahahalagang bahagi nito habang naglalaro. Bawat exhibit sa museo ay may totoong kasaysayan at mga pinagkunan (sources).',
+    'At ang gallery na ito ang website ng buong klase: lahat ng ambag ng aming mga kaklase, nasa iisang museo.',
   ],
 } as const;
 

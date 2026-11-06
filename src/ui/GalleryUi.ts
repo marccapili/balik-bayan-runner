@@ -133,7 +133,7 @@ export class GalleryUi {
 
   private head(name: string, title: string, form: string): string {
     return `<header class="gv-head">
-        <div><small>${esc(form)}</small><h2>${esc(title)}</h2><p>Gawa ni <b>${esc(name)}</b></p></div>
+        <div><small>${esc(form)}</small><h2>${esc(title)}</h2><p>Gawa ${/ at /.test(name) ? 'nina' : 'ni'} <b>${esc(name)}</b></p></div>
         <button class="icon-btn gv-close" data-act="close" aria-label="Isara">✕</button>
       </header>`;
   }
@@ -360,7 +360,7 @@ export class GalleryUi {
       </header>
       <div class="gv-list">
         <button class="gv-item special" data-act="tv"><span class="gv-ico">📺</span><span><b>${esc(GALLERY_TV.title)}</b><em>${esc(GALLERY_TV.credit)}</em><small>Video sa gitna ng gallery</small></span></button>
-        <button class="gv-item special" data-act="game"><span class="gv-ico">☀</span><span><b>${esc(GAME_PLAQUE.title)}</b><em>ni ${esc(GAME_PLAQUE.name)}</em><small>${esc(GAME_PLAQUE.form)}</small></span></button>
+        <button class="gv-item special" data-act="game"><span class="gv-ico">☀</span><span><b>${esc(GAME_PLAQUE.title)}</b><em>nina ${esc(GAME_PLAQUE.name)}</em><small>${esc(GAME_PLAQUE.form)}</small></span></button>
         ${cards}
       </div>`,
     );

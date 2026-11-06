@@ -442,11 +442,13 @@ export class GalleryScene implements GameScene {
         fitText(ctx, GAME_PLAQUE.title.toUpperCase(), '900', 50, 24, 470);
         ctx.fillText(GAME_PLAQUE.title.toUpperCase(), 256, 170);
         ctx.fillStyle = '#f2c14e';
-        fitText(ctx, `Ang larong ito · ni ${GAME_PLAQUE.name}`, '600', 30, 18, 470);
-        ctx.fillText(`Ang larong ito · ni ${GAME_PLAQUE.name}`, 256, 230);
+        ctx.font = '600 22px system-ui, sans-serif';
+        ctx.fillText('Ang larong ito · gawa nina', 256, 212);
+        fitText(ctx, GAME_PLAQUE.name, '700', 28, 16, 470);
+        ctx.fillText(GAME_PLAQUE.name, 256, 248);
         ctx.fillStyle = 'rgba(255,246,223,0.8)';
-        ctx.font = '600 24px system-ui, sans-serif';
-        ctx.fillText('Lapit para basahin', 256, 286);
+        ctx.font = '600 22px system-ui, sans-serif';
+        ctx.fillText('Lapit para basahin', 256, 296);
       }),
       0.6,
     );
