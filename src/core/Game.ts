@@ -28,6 +28,8 @@ import type { PromptMode } from '../ui/Hud';
 import type { IntroEvent } from '../gameplay/IntroSequence';
 import type { RunEvent } from '../gameplay/SurvivalRun';
 import { LobbyScene } from '../scenes/LobbyScene';
+import type { GalleryScene } from '../scenes/GalleryScene';
+import type { GalleryUi } from '../ui/GalleryUi';
 import { MuseumScene } from '../scenes/MuseumScene';
 import { Hud } from '../ui/Hud';
 import { Lobby } from '../ui/Lobby';
@@ -40,6 +42,9 @@ const JOIN_SOUND: Record<EnemyKind, SfxName> = { guard: 'alert', dog: 'bark', mu
 const MINI_SOUND: Record<MiniSound, SfxName> = { click: 'click', good: 'coin', bad: 'denied', win: 'unlock' };
 /** The cutscene overlay lives in its own chunk; started during loading so it is ready on the first tap. */
 const loadLore = (): Promise<typeof import('../ui/LorePlayer')> => import('../ui/LorePlayer');
+/** The Future Heroes Gallery (room + viewers) is its own chunk, loaded on the first visit. */
+const loadGallery = (): Promise<[typeof import('../scenes/GalleryScene'), typeof import('../ui/GalleryUi')]> =>
+  Promise.all([import('../scenes/GalleryScene'), import('../ui/GalleryUi')]);
 
 /** Owns the engine, the render loop, both scenes and the top-level state machine. */
 export class Game {
@@ -79,6 +84,11 @@ export class Game {
   /** The chosen hero's start clip, played on PLAY (null with ?play / ?noclip). */
   private clipPlayer: ClipPlayer | null = null;
   private loreModules: ReturnType<typeof loadLore> | null = null;
+  /** Future Heroes Gallery: built on the first visit. */
+  private gallery: GalleryScene | null = null;
+  private galleryUi: GalleryUi | null = null;
+  /** What the open gallery viewer shows (the TV mutes the music). */
+  private galleryView: 'none' | 'work' | 'tv' = 'none';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -117,7 +127,7 @@ export class Game {
   async start(onProgress: (p: number, label: string) => void): Promise<boolean> {
     const q = new URLSearchParams(location.search);
     // ?play / ?nolore (tests, dev) skip the opening cutscene.
-    const wantsLore = !q.has('play') && !q.has('nolore');
+    const wantsLore = !q.has('play') && !q.has('nolore') && !q.has('gallery');
     if (wantsLore) this.loreModules = loadLore();
     onProgress(0.08, 'Kinukuha ang mga bayani…');
     await preloadHeroModels();
@@ -183,6 +193,7 @@ export class Game {
       },
       onClick: () => this.sfx.play('click'),
       onReplayLore: () => void this.beginLore(),
+      onGallery: () => void this.openGallery(),
     });
     this.mini = new MiniGameHost(this.uiRoot, {
       onWin: () => this.miniWon(),
@@ -217,6 +228,8 @@ export class Game {
     this.showLobby();
     // Test/dev shortcut: jump straight into a run (no lobby, no cinematic).
     if (q.has('play')) this.quickStart();
+    // Direct link for the class: …/?gallery opens the Future Heroes Gallery.
+    else if (q.has('gallery')) void this.openGallery();
     return false;
   }
 
@@ -371,6 +384,62 @@ export class Game {
     this.switching = false;
   }
 
+  /** Event banner: lobby → portal wipe → Future Heroes Gallery with the selected hero. */
+  async openGallery(): Promise<void> {
+    if (this.switching || this.fsm.state !== 'lobby') return;
+    this.switching = true;
+    this.sfx.play('portal');
+    this.lobby?.playOut();
+    const [mods] = await Promise.all([loadGallery(), this.transition?.cover()]);
+    if (!this.gallery || !this.galleryUi) {
+      const [{ GalleryScene }, { GalleryUi }] = mods;
+      this.gallery = new GalleryScene(this.engine, this.input, this.heroId);
+      await this.gallery.scene.whenReadyAsync();
+      this.galleryUi = new GalleryUi(this.uiRoot, {
+        onBack: () => void this.leaveGallery(),
+        onOpen: (i) => {
+          this.galleryView = i >= 0 ? 'work' : this.galleryUi?.showingTv ? 'tv' : 'work';
+          this.input.releaseAll();
+          this.input.enabled = false;
+          if (i >= 0) this.gallery?.markSeen(i);
+        },
+        onClose: () => {
+          this.galleryView = 'none';
+          this.input.enabled = true;
+        },
+        onClick: () => this.sfx.play('click'),
+        onPage: () => this.sfx.play('page'),
+      });
+      this.galleryUi.interactPressed = () => this.input.press('interact');
+    }
+    this.gallery.setHero(this.heroId, this.save.skinOf(this.heroId));
+    this.gallery.reset();
+    this.fsm.transition('gallery');
+    this.input.releaseAll();
+    this.lobby?.setVisible(false);
+    if (this.lobbyScene) this.lobbyScene.active = false;
+    this.hud?.setMode('off');
+    document.body.dataset.mode = 'gallery';
+    this.galleryUi.setVisible(true);
+    await this.transition?.reveal();
+    this.switching = false;
+  }
+
+  /** Back button / Esc in the gallery → portal wipe → lobby. */
+  async leaveGallery(): Promise<void> {
+    if (this.switching || this.fsm.state !== 'gallery') return;
+    this.switching = true;
+    this.input.releaseAll();
+    await this.transition?.cover();
+    this.galleryUi?.setVisible(false);
+    this.galleryView = 'none';
+    this.input.enabled = true;
+    this.fsm.transition('lobby');
+    this.showLobby();
+    await this.transition?.reveal();
+    this.switching = false;
+  }
+
   /** Training: lobby → portal wipe → Hall of Heroes with the previewed hero (owned or not). */
   async train(id: HeroId): Promise<void> {
     if (this.switching || this.fsm.state !== 'lobby' || !this.museum) return;
@@ -493,6 +562,7 @@ export class Game {
       else if (state === 'paused') this.resume();
       else if (state === 'reading') this.closeExhibit();
       else if (state === 'lobby') this.lobby?.back();
+      else if (state === 'gallery' && !this.galleryUi?.back()) void this.leaveGallery();
       else if (state === 'lore') this.skipLore();
     }
     if (state === 'lore' && this.lore) {
@@ -500,6 +570,11 @@ export class Game {
       this.advanceLore(dt);
     } else if (state === 'lobby') {
       this.lobbyScene?.update(dt);
+    } else if (state === 'gallery' && this.gallery && this.galleryUi) {
+      const viewing = this.galleryUi.viewing;
+      if (interact && !viewing && this.gallery.near) this.galleryUi.openSpot(this.gallery.near);
+      this.gallery.update(dt, this.galleryUi.viewing);
+      this.galleryUi.setNear(this.galleryUi.viewing ? null : this.gallery.near);
     } else if (state === 'intro' && this.museum) {
       const mv = this.input.move;
       const drop = this.dropRequested || this.input.consume('confirm') || this.input.consume('ability') || Math.hypot(mv.x, mv.z) > 0.5;
@@ -563,6 +638,7 @@ export class Game {
     if (this.clipPlayer?.visible) return;
     if (state === 'lobby' || state === 'boot') this.lobbyScene?.scene.render();
     else if (state === 'lore') return;
+    else if (state === 'gallery') this.gallery?.scene.render();
     else this.museum?.scene.render();
   }
 
@@ -572,6 +648,7 @@ export class Game {
     // The intro video and the hero start clips carry their own score and sound effects.
     if (state === 'lore' || this.clipPlayer?.visible) return this.music.set(null);
     if (state === 'boot' || state === 'lobby') return this.music.set('lobby');
+    if (state === 'gallery') return this.galleryView === 'tv' ? this.music.set(null) : this.music.set('lobby', 0, this.galleryView === 'work' ? MUSIC.duckPaused : 1);
     if (state === 'gameover' || !run) return this.music.set(null);
     const enemies = run.training ? 0 : run.guards.length;
     const intensity = run.endless ? 1 : Math.min(0.84, enemies / MUSIC.fullIntensityEnemies);

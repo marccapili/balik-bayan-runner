@@ -1,5 +1,12 @@
 # Development changelog
 
+## Future Heroes Gallery — 2026-11-05 (owner: the class's "Ang Aking Ambag" website lives inside the game)
+- Lobby event banner "✨ Future Heroes Gallery / Ambag ng klase sa kasaysayan, tara!" (glow + pulse, NEW badge until first visit) → portal → a calm museum hall (new FSM state `gallery`; no enemies, coins or rewards).
+- 16 classmates' works, alphabetical by surname: multi-page / multi-file works are books on lecterns (one file = one page, 3D page-turn like an e-book, two-page spreads on wide screens, swipe / ‹ › / arrow keys, tap to zoom); one-pagers are scrolls that unroll. Vargas's 8 s video is a page in their book.
+- Center TV plays the class video (YouTube `N294xA7iqTQ`, "Panimula: Babasahin sa Kasaysayan ng Pilipinas"); the game's own plaque by the door; "Lahat ng gawa" list view; `?gallery` direct link.
+- Files: `tools/gallery_assets.py` turns the Drive submission folder into `public/gallery/<slug>/` (WebP pages ≤1600 px, MP4) and writes `src/data/galleryPages.ts`; names/titles in `src/data/gallery.ts`. ~11 MB total, loaded only when opened.
+- Tests: `tests/unit/gallery.test.ts`, `tests/e2e/gallery.mjs` (now part of `npm run test:e2e`).
+
 ## Sculpted Lapu-Lapu — 2026-11-05 (owner: "update Lapu-Lapu's visuals", with their GLB)
 - Lapu-Lapu now uses the owner's sculpted model (`public/models/lapulapu.glb`): red putong, long hair, tattoos, bead necklace, round belt buckle, red loincloth, wrist guards, gold earrings, no weapon. It is skinned onto the same rig as Bonifacio and Rizal, so idle, run, ability and lobby poses work unchanged. Skins other than classic keep the procedural model.
 - His hair sweeps to one side, so the model's bounding box is off-centre. A new `centerX` landmark in `data/heroModels.ts` shifts the body onto the rig's midline before skinning.

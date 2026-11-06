@@ -4,6 +4,8 @@ import { EXHIBIT_BY_ID, EXHIBITS, FICTION_NOTE, KIND_LABEL } from '../data/exhib
 import { HERO_ORDER, HEROES, type HeroId } from '../data/heroes';
 import { LEADERBOARD } from '../data/lobby';
 import { ROOMS } from '../data/museumLayout';
+import { GALLERY_UI } from '../data/gallery';
+import '../ui/gallery.css';
 import { HERO_LEVEL, PLAYER_LEVEL, PROFILE_FRAMES, type ProfileFrame } from '../data/progression';
 import { SKIN_BY_ID, SKINS, type SkinDef } from '../data/skins';
 import { describe, isDone } from '../gameplay/Missions';
@@ -30,6 +32,8 @@ export interface LobbyCallbacks {
   onClick(): void;
   /** Settings → watch the opening lore cutscene again. */
   onReplayLore(): void;
+  /** Event banner → the Future Heroes Gallery (classmates' works). */
+  onGallery(): void;
 }
 
 type Panel = 'leaderboard' | 'settings' | 'profile' | 'missions' | 'daily' | 'archive';
@@ -41,6 +45,23 @@ const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   if (!el) throw new Error(`Lobby element missing: ${sel}`);
   return el;
 };
+
+/** The gallery banner shows NEW until it's been opened once on this device (not part of the save). */
+const GALLERY_SEEN_KEY = 'bbr-gallery-visited';
+function galleryVisited(): boolean {
+  try {
+    return localStorage.getItem(GALLERY_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function markGalleryVisited(): void {
+  try {
+    localStorage.setItem(GALLERY_SEEN_KEY, '1');
+  } catch {
+    /* private mode: the badge just stays */
+  }
+}
 
 const fmt = (n: number): string => n.toLocaleString('en-US');
 
@@ -86,6 +107,11 @@ export class Lobby {
           <button class="icon-btn lb-gear" data-act="settings" aria-label="Settings">⚙</button>
         </div>
       </header>
+      <button class="gl-banner" data-act="gallery">
+        <span class="gb-ico">🏛️</span>
+        <span><b>${GALLERY_UI.bannerTitle}</b><small>${GALLERY_UI.bannerSub}</small></span>
+        <span class="gb-new" hidden>NEW</span>
+      </button>
       <nav class="lb-side lb-left">
         <button class="side-btn" data-act="collection" data-tab="heroes"><span>🛍️</span>Shop</button>
         <button class="side-btn" data-act="archive"><span>📜</span>Archive<b class="arch-count"></b></button>
@@ -170,6 +196,7 @@ export class Lobby {
 
   setVisible(v: boolean): void {
     this.root.classList.toggle('gone', !v);
+    $(this.root, '.gb-new').hidden = galleryVisited();
     if (v) {
       this.save.ensureDaily();
       this.refresh();
@@ -194,6 +221,10 @@ export class Lobby {
     switch (act) {
       case 'play':
         this.cb.onPlay();
+        break;
+      case 'gallery':
+        markGalleryVisited();
+        this.cb.onGallery();
         break;
       case 'train':
         this.cb.onTrain(el.dataset.hero ? (el.dataset.hero as HeroId) : d.selectedHero);
