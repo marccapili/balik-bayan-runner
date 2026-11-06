@@ -55,6 +55,20 @@ SOURCES = {
     'vera-perez': ['VERA-PEREZ_babasahin_finals.jpg'],
 }
 
+# Tall pages to cut into separate book pages, as fractions of the page height (owner, 2026-11-06:
+# Esguerra's explanation was too small to read under the drawing, so it gets its own page).
+SPLITS = {
+    ('esguerra', 2): [(0.0, 0.356), (0.359, 0.966)],
+}
+
+
+def split(slug, n, im):
+    """The PDF/image page `n` (1-based) of `slug`, cut into parts when SPLITS says so."""
+    parts = SPLITS.get((slug, n))
+    if not parts:
+        return [im]
+    return [im.crop((0, round(a * im.height), im.width, round(b * im.height))) for a, b in parts]
+
 
 def fit(im, side):
     s = min(1.0, side / max(im.size))
@@ -98,16 +112,21 @@ def main(root):
         for f in os.listdir(d):
             os.remove(os.path.join(d, f))
         pages = []
+        n = 0  # source page counter (before splits)
         for rel in files:
             src = os.path.join(root, rel)
             if rel.lower().endswith('.pdf'):
                 for im in pdf_pages(src):
-                    pages.append(save_page(im, os.path.join(d, f'p{len(pages) + 1:02d}.webp')))
+                    n += 1
+                    for part in split(slug, n, im):
+                        pages.append(save_page(part, os.path.join(d, f'p{len(pages) + 1:02d}.webp')))
             elif rel.lower().endswith('.mp4'):
                 pages.append(video(src, d, len(pages) + 1))
             else:
+                n += 1
                 with Image.open(src) as im:
-                    pages.append(save_page(im, os.path.join(d, f'p{len(pages) + 1:02d}.webp')))
+                    for part in split(slug, n, im):
+                        pages.append(save_page(part, os.path.join(d, f'p{len(pages) + 1:02d}.webp')))
         first = pages[0]['src'] if pages[0]['type'] == 'image' else pages[0]['poster']
         with Image.open(os.path.join(d, first)) as im:
             fit(im.convert('RGB'), THUMB).save(os.path.join(d, 'thumb.webp'), 'WEBP', quality=75, method=6)
