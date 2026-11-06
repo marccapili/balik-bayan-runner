@@ -89,6 +89,8 @@ async function run(browser, label, viewport) {
   await page.screenshot({ path: `${OUT}/gallery-${label}-6-list.png` });
   await page.click('.gv-item[data-act="game"]');
   await page.waitForSelector('.gl-overlay.is-game', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${OUT}/gallery-${label}-7-game.png` });
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
 
