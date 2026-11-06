@@ -239,6 +239,7 @@ export const WALL_ART: WallArt[] = [
   // Portraits in the Hall of Heroes (decorative frames; real exhibits arrive in M6).
   { kind: 'portrait', x: 15, z: 23.65, rotY: 0, variant: 0 },
   { kind: 'portrait', x: 25, z: 23.65, rotY: 0, variant: 1 },
+  { kind: 'portrait', x: 29.65, z: 20, rotY: Math.PI / 2, variant: 2 },
   // Wide canvas for the Spoliarium exhibit (a stylised nod, not a reproduction).
   { kind: 'painting', x: 29.65, z: 13, rotY: Math.PI / 2, variant: 0 },
   { kind: 'portrait', x: 29.65, z: 5, rotY: Math.PI / 2, variant: 3 },

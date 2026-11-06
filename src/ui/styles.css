@@ -1817,6 +1817,38 @@ body.touch .ab-key {
 .ex-tile-icon {
   font-size: 28px;
 }
+.ex-tile-photo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.ex-photo {
+  margin: 12px 0 14px;
+  padding: 0;
+}
+.ex-photo img {
+  display: block;
+  width: 100%;
+  max-height: min(52vh, 420px);
+  object-fit: contain;
+  border-radius: 12px;
+  background: #14100c;
+  border: 3px solid var(--gold);
+  box-sizing: border-box;
+}
+.ex-photo figcaption {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.75;
+  font-style: italic;
+}
+.ex-credit {
+  font-style: normal;
+  opacity: 0.85;
+}
 .ex-tile b {
   font: 700 14px/1.15 var(--font-display);
 }

@@ -1,5 +1,6 @@
 import type { SaveManager, ShopResult, UnlockResult } from '../core/SaveManager';
 import { ABILITIES } from '../data/abilities';
+import { exhibitAsset, exhibitPhoto } from '../data/exhibitPhotos';
 import { EXHIBIT_BY_ID, EXHIBITS, FICTION_NOTE, KIND_LABEL } from '../data/exhibits';
 import { HERO_ORDER, HEROES, type HeroId } from '../data/heroes';
 import { LEADERBOARD } from '../data/lobby';
@@ -674,9 +675,11 @@ export class Lobby {
         const roomName = (id: string): string => ROOMS.find((r) => r.id === id)?.sign ?? id;
         const tiles = EXHIBITS.map((e) => {
           const found = d.discovered.includes(e.id);
+          const photo = exhibitPhoto(e.id);
+          const thumb = photo ? `<img class="ex-tile-photo" src="${exhibitAsset(photo.file)}" alt="" loading="lazy" />` : `<span class="ex-tile-icon">${e.icon}</span>`;
           return found
             ? `<button class="ex-tile found" data-act="exhibit" data-id="${e.id}" data-kind="${e.kind}">
-                <span class="ex-tile-icon">${e.icon}</span><b>${esc(e.title)}</b><small>${esc(KIND_LABEL[e.kind])}</small></button>`
+                ${thumb}<b>${esc(e.title)}</b><small>${esc(KIND_LABEL[e.kind])}</small></button>`
             : `<div class="ex-tile" data-kind="${e.kind}"><span class="ex-tile-icon">❔</span><b>???</b><small>Hanapin sa ${esc(roomName(e.room))}</small></div>`;
         }).join('');
         body.innerHTML = `<h2>Archive 📜</h2>

@@ -1,3 +1,4 @@
+import { exhibitAsset, exhibitPhoto } from '../data/exhibitPhotos';
 import type { Exhibit } from '../data/exhibits';
 import { BAYBAYIN, MINIGAME, MINIGAME_INFO, WIRE_COLORS } from '../data/minigames';
 import { BaybayinMatch, CodeLock, DustGrid, makeRoute, RouteGame, SwapPuzzle, swipeVerdict, TimelineSort, WiresGame, type Pt } from '../gameplay/MiniGames';
@@ -386,6 +387,35 @@ export class MiniGameHost {
     });
   }
 
+  /**
+   * Square artwork for restore / dust. Starts as the icon plaque; when the exhibit has a photo,
+   * `onPhoto` gets a square crop of it once loaded (skipped if the game was closed meanwhile).
+   */
+  private artWithPhoto(e: Exhibit, size: number, onPhoto: (url: string) => void): string {
+    const photo = exhibitPhoto(e.id);
+    if (photo) {
+      const stage = this.stage.firstElementChild;
+      const img = new Image();
+      img.onload = (): void => {
+        if (this.stage.firstElementChild !== stage && stage !== null) return;
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const x = c.getContext('2d');
+        if (!x || !img.naturalWidth) return;
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        const sx = (img.naturalWidth - side) / 2;
+        const sy = (img.naturalHeight - side) * (photo.focusY ?? 0.5);
+        x.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        x.strokeStyle = '#ffd34d';
+        x.lineWidth = size * 0.03;
+        x.strokeRect(size * 0.015, size * 0.015, size * 0.97, size * 0.97);
+        onPhoto(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = exhibitAsset(photo.file);
+    }
+    return this.art(e, size);
+  }
+
   /** Square artwork for restore / dust: the exhibit's icon on a museum-plaque background. */
   private art(e: Exhibit, size: number): string {
     const c = document.createElement('canvas');
@@ -425,9 +455,13 @@ export class MiniGameHost {
   private buildRestore(e: Exhibit, d: number): void {
     const size = MINIGAME.restore.size;
     const p = new SwapPuzzle(size, d, this.rng);
-    const url = this.art(e, 360);
+    let url = '';
     this.stage.innerHTML = `<div class="mg-restore" style="--n:${size}">${p.order.map((_, i) => `<button class="rs-tile" data-i="${i}" aria-label="Piece ${i + 1}"></button>`).join('')}</div>`;
     const tiles = [...this.stage.querySelectorAll<HTMLElement>('.rs-tile')];
+    url = this.artWithPhoto(e, 360, (u) => {
+      url = u;
+      draw();
+    });
     const draw = (): void =>
       tiles.forEach((t, slot) => {
         const piece = p.order[slot]!;
@@ -456,7 +490,7 @@ export class MiniGameHost {
     this.stage.innerHTML = `<div class="mg-dust"><img class="du-art" alt="" /><canvas class="du-dust"></canvas><div class="du-bar"><i></i></div></div>`;
     const box = this.stage.querySelector<HTMLElement>('.mg-dust')!;
     const img = box.querySelector<HTMLImageElement>('.du-art')!;
-    img.src = this.art(e, 360);
+    img.src = this.artWithPhoto(e, 360, (u) => (img.src = u));
     const cv = box.querySelector<HTMLCanvasElement>('.du-dust')!;
     const bar = box.querySelector<HTMLElement>('.du-bar i')!;
     cv.width = 360;
