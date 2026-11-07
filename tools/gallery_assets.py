@@ -29,6 +29,7 @@ QUALITY = 80
 # slug -> ordered list of source files (relative to the submission folder). PDFs expand to all their pages.
 SOURCES = {
     'acuna': ['Acuña_Babasahin_Finals.pdf'],  # sent in the project chat 2026-11-06
+    'aguilar': ['Aguilar_Ambag.pdf'],  # sent in the project chat 2026-11-07
     'amargo': ['Amargo_Babasahin Finals.pdf'],  # sent in the project chat 2026-11-06
     'casantusan': ['CASANTUSAN_babasahin_finals.pdf'],
     'diaz': ['Diaz_Babasahin_Finals/JEEPNEY PHASEOUT.png', 'Diaz_Babasahin_Finals/PALIWANAG.png'],
@@ -53,6 +54,7 @@ SOURCES = {
         'Vargas_Dunhill_Porsche/A Katipunera during PH independence declration 1946.mp4',
     ],
     'vera-perez': ['VERA-PEREZ_babasahin_finals.jpg'],
+    'villarama': ['GE002_Villarama_Finals.pdf'],  # sent in the project chat 2026-11-07
 }
 
 # Tall pages to cut into separate book pages, as fractions of the page height (owner, 2026-11-06:

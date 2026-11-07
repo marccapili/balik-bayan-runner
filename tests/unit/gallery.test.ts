@@ -7,7 +7,7 @@ describe('gallery data', () => {
   it('lists every classmate once, alphabetically by surname', () => {
     const slugs = GALLERY_WORKS.map((w) => w.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
-    expect(GALLERY_WORKS.length).toBe(18);
+    expect(GALLERY_WORKS.length).toBe(20);
     const keys = GALLERY_WORKS.map((w) => w.sortName);
     expect([...keys].sort((a, b) => a.localeCompare(b, 'en'))).toEqual(keys);
   });

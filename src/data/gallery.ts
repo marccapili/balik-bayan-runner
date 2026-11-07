@@ -36,6 +36,7 @@ const work = (slug: string, name: string, sortName: string, title: string, form:
 
 export const GALLERY_WORKS: readonly GalleryWork[] = [
   work('acuna', 'Shailoh Acuña', 'Acuna', 'Ang Aking Ambag', 'Guhit at paliwanag'),
+  work('aguilar', 'Athea Aguilar', 'Aguilar', 'Mula Kusina Hanggang Busina', 'Photo collage'),
   work('amargo', 'Miguel Franco Amargo', 'Amargo', 'Pag-Ibig Na Wagas', 'Tula'),
   work('casantusan', 'JD Casantusan', 'Casantusan', 'Sa Likod ng Manibela', 'Magazine'),
   work('diaz', 'Jan Marchielle J. Diaz', 'Diaz', 'Jeepney Phaseout', 'Poster at paliwanag'),
@@ -53,6 +54,7 @@ export const GALLERY_WORKS: readonly GalleryWork[] = [
   work('uy', 'Raphael Uy', 'Uy', 'Ang Aking Ambag sa Kasaysayan', 'Sanaysay'),
   work('vargas', 'Dunhill Porsche Vargas', 'Vargas', 'Ano ang Ambag Mo?', 'Tula, cartoon, memes at video'),
   work('vera-perez', 'Reigen Vera-Perez', 'Vera-Perez', 'Ang Dalawang Mukha ng Progreso', 'Poster'),
+  work('villarama', 'Villarama', 'Villarama', 'Ang Aking Ambag', 'Ilustrasyon'),
 ].sort((a, b) => a.sortName.localeCompare(b.sortName, 'en'));
 
 export const exhibitStyle = (w: GalleryWork): ExhibitStyle => (w.pages.length > 1 ? 'book' : 'scroll');

@@ -10,6 +10,14 @@ export const GALLERY_PAGES: Record<string, GalleryPage[]> = {
       "h": 1600
     }
   ],
+  "aguilar": [
+    {
+      "type": "image",
+      "src": "p01.webp",
+      "w": 1600,
+      "h": 900
+    }
+  ],
   "amargo": [
     {
       "type": "image",
@@ -403,6 +411,14 @@ export const GALLERY_PAGES: Record<string, GalleryPage[]> = {
       "src": "p01.webp",
       "w": 1200,
       "h": 1600
+    }
+  ],
+  "villarama": [
+    {
+      "type": "image",
+      "src": "p01.webp",
+      "w": 1600,
+      "h": 1103
     }
   ]
 };

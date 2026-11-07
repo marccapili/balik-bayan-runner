@@ -31,7 +31,7 @@ async function run(browser, label, viewport) {
   await page.screenshot({ path: `${OUT}/gallery-${label}-2-room.png` });
 
   const spots = await page.evaluate(() => window.__bbr.gallery.layout.spots.map((s) => ({ x: s.at.x, z: s.at.z, kind: s.kind, i: s.index })));
-  check(`${label}: 18 works + TV + game plaque`, spots.length === 20);
+  check(`${label}: 20 works + TV + game plaque`, spots.length === 22);
   const tp = (x, z) => page.evaluate(([x, z]) => (window.__bbr.gallery.player.motor.state.pos = { x, z }), [x, z]);
 
   // Walk (keyboard) a little to prove movement works in the room.
@@ -43,7 +43,7 @@ async function run(browser, label, viewport) {
   check(`${label}: hero walks in the gallery`, p1.z > p0.z + 0.5, `z ${p0.z.toFixed(2)} → ${p1.z.toFixed(2)}`);
 
   // Book (third work alphabetically: Casantusan, 11 pages).
-  const book = spots.find((s) => s.kind === 'work' && s.i === 2);
+  const book = spots.find((s) => s.kind === 'work' && s.i === 3);
   await tp(book.x - Math.sign(book.x) * 0.95, book.z);
   await page.waitForSelector('.gl-prompt:not([hidden])', { timeout: 15000 });
   await page.screenshot({ path: `${OUT}/gallery-${label}-3-near.png` });
@@ -85,7 +85,7 @@ async function run(browser, label, viewport) {
   // List view + game plaque.
   await page.click('.gl-list-btn');
   const items = await page.$$eval('.gv-item', (els) => els.length);
-  check(`${label}: list shows every work`, items === 20, `${items} cards`);
+  check(`${label}: list shows every work`, items === 22, `${items} cards`);
   await page.screenshot({ path: `${OUT}/gallery-${label}-6-list.png` });
   await page.click('.gv-item[data-act="game"]');
   await page.waitForSelector('.gl-overlay.is-game', { timeout: 5000 });
