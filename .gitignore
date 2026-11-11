@@ -6,3 +6,13 @@ tests/e2e/screenshots
 .DS_Store
 cutscene/out
 __pycache__/
+
+# Claude Code Game Studios (per-developer + session files)
+.claude/settings.local.json
+.claude/agent-memory/
+.claude/worktrees/
+CLAUDE.local.md
+project.local.yaml
+production/session-logs/
+production/session-state/
+.scratch/
