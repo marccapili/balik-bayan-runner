@@ -29,13 +29,19 @@ export interface MuseumBuild {
   occluders: MuseumOccluder[];
   /** Objects animated every frame (the rotating sun on the monument). */
   spinners: TransformNode[];
+  /** Solid world geometry that throws a shadow (walls, props), and what the shadows land on. */
+  casters: AbstractMesh[];
+  receivers: AbstractMesh[];
   dispose(): void;
 }
 
 const WOOD = '#8a5a2b';
 const WOOD_DARK = '#5b3a22';
 const MARBLE = '#efe9df';
-const GOLD = '#c48a2c';
+/** Brass trim. Kept low-glow: up-facing brass under the key light clips to flat orange otherwise. */
+const GOLD = '#b98a3a';
+/** Velvet pad on plinth tops (the museum's navy). */
+const VELVET = '#27336e';
 
 /**
  * Builds the whole museum from data/museumLayout.ts.
@@ -91,7 +97,7 @@ export function buildMuseum(scene: Scene): MuseumBuild {
   ] as const) {
     const th = CreateBox('threshold', { width: w, height: 0.02, depth: d }, scene);
     th.position.set(x, 0.01, z);
-    add(th, GOLD, { glow: 0.3 });
+    add(th, GOLD, { glow: 0.1 });
   }
 
   // Sun medallion under the spawn point — the portal landing spot.
@@ -219,10 +225,30 @@ export function buildMuseum(scene: Scene): MuseumBuild {
     if (!spinning.has(m)) m.freezeWorldMatrix();
   });
 
+  // Shadows: solid props + walls cast; floors, walls and props receive. Glass, glowing bits,
+  // flat decals and wall pictures stay out (they would only add noise).
+  const flat = new Set(['sunMedallion', 'threshold']);
+  const casters: AbstractMesh[] = [];
+  const receivers: AbstractMesh[] = [];
+  for (const m of root.getChildMeshes()) {
+    const sm = m.material as StandardMaterial | null;
+    if (!sm || flat.has(m.name) || m.name.startsWith('floor_')) {
+      if (m.name.startsWith('floor_')) receivers.push(m);
+      continue;
+    }
+    const isPicture = !!sm.diffuseTexture;
+    const glowing = sm.emissiveColor.r + sm.emissiveColor.g + sm.emissiveColor.b > 2.2 && !sm.emissiveFresnelParameters;
+    if (sm.alpha < 1 || isPicture || glowing || spinning.has(m)) continue;
+    casters.push(m);
+    receivers.push(m);
+  }
+
   return {
     root,
     occluders,
     spinners,
+    casters,
+    receivers,
     dispose() {
       root.dispose(false, true);
       for (const t of textures) t.dispose();
@@ -251,8 +277,10 @@ function buildProp(scene: Scene, p: Prop, h: TransformNode, add: AddFn, spinners
 
   switch (p.kind) {
     case 'pedestal': {
+      box(p.w + 0.14, 0.12, p.d + 0.14, 0.06, MARBLE, { glow: 0.2 });
       box(p.w, p.h, p.d, p.h / 2, MARBLE, { glow: 0.25 });
-      box(p.w + 0.1, 0.08, p.d + 0.1, p.h, GOLD, { glow: 0.3 });
+      box(p.w + 0.1, 0.08, p.d + 0.1, p.h, GOLD, { glow: 0.1, spec: 0.4 });
+      box(p.w - 0.1, 0.03, p.d - 0.1, p.h + 0.05, VELVET, { glow: 0.12 });
       const v = p.variant ?? 0;
       if (v === 0) {
         sph(0.55, p.h + 0.3, '#a0522d', 10).scaling.y = 0.9; // palayok clay pot
@@ -337,7 +365,7 @@ function buildProp(scene: Scene, p: Prop, h: TransformNode, add: AddFn, spinners
     case 'displayCase':
     case 'jarCase': {
       box(p.w, 0.8, p.d, 0.4, WOOD_DARK, {});
-      box(p.w + 0.06, 0.06, p.d + 0.06, 0.82, GOLD, { glow: 0.3 });
+      box(p.w + 0.06, 0.06, p.d + 0.06, 0.82, GOLD, { glow: 0.1, spec: 0.4 });
       const glassH = p.h - 0.8;
       box(p.w - 0.06, glassH, p.d - 0.06, 0.8 + glassH / 2, '#bfe3ff', { alpha: 0.22, glow: 0.4, spec: 0.8 });
       if (p.kind === 'jarCase') {
@@ -357,15 +385,28 @@ function buildProp(scene: Scene, p: Prop, h: TransformNode, add: AddFn, spinners
     }
     case 'statue': {
       const bronze = (p.variant ?? 0) % 2 === 0 ? '#9c6b3a' : '#a9a49a';
+      const raised = (p.variant ?? 0) > 1;
+      const metal: MatOpts = { spec: 0.45, glow: 0.1 };
+      box(p.w + 0.16, 0.14, p.d + 0.16, 0.07, MARBLE, { glow: 0.2 });
       box(p.w, 0.9, p.d, 0.45, MARBLE, { glow: 0.2 });
-      box(p.w + 0.1, 0.08, p.d + 0.1, 0.92, GOLD, { glow: 0.3 });
-      cyl(0.6, 0.45, 0.6, 1.25, bronze, 10, { spec: 0.4 });
-      cyl(0.5, 0.35, 0.45, 1.8, bronze, 10, { spec: 0.4 });
-      sph(0.5, 2.3, bronze, 10, { spec: 0.4 });
-      const arm = cyl(0.55, 0.12, 0.12, 2.15, bronze, 8, { spec: 0.4 }, 0.3);
-      arm.rotation.z = (p.variant ?? 0) > 1 ? -2.4 : -0.6;
-      arm.position.y = (p.variant ?? 0) > 1 ? 2.35 : 1.95;
-      arm.position.x = (p.variant ?? 0) > 1 ? 0.35 : 0.32;
+      box(p.w + 0.1, 0.08, p.d + 0.1, 0.92, GOLD, { glow: 0.1, spec: 0.4 });
+      box(p.w - 0.1, 0.03, p.d - 0.1, 0.97, VELVET, { glow: 0.12 });
+      // Simple heroic figure: robe, chest, shoulders, head, one arm at rest and one gesturing.
+      cyl(0.7, 0.4, 0.62, 1.32, bronze, 10, metal);
+      cyl(0.48, 0.5, 0.4, 1.88, bronze, 10, metal);
+      sph(0.3, 2.06, bronze, 8, metal, -0.27);
+      sph(0.3, 2.06, bronze, 8, metal, 0.27);
+      cyl(0.12, 0.16, 0.2, 2.17, bronze, 8, metal);
+      sph(0.46, 2.42, bronze, 10, metal);
+      const rest = cyl(0.62, 0.11, 0.13, 1.78, bronze, 8, metal, -0.34);
+      rest.rotation.z = 0.12;
+      const arm = cyl(0.62, 0.11, 0.13, raised ? 2.34 : 1.86, bronze, 8, metal, raised ? 0.4 : 0.42);
+      arm.rotation.z = raised ? -2.5 : -0.75;
+      if (raised) {
+        // Held aloft: a rolled proclamation.
+        const scroll = cyl(0.34, 0.09, 0.09, 2.66, MARBLE, 8, { glow: 0.2 }, 0.62);
+        scroll.rotation.z = Math.PI / 2;
+      }
       break;
     }
     case 'balangay': {
@@ -389,7 +430,7 @@ function buildProp(scene: Scene, p: Prop, h: TransformNode, add: AddFn, spinners
     }
     case 'sunMonument': {
       cyl(0.5, p.w, p.w + 0.2, 0.25, MARBLE, 16, { glow: 0.2 });
-      cyl(0.08, p.w + 0.1, p.w + 0.1, 0.52, GOLD, 16, { glow: 0.3 });
+      cyl(0.08, p.w + 0.1, p.w + 0.1, 0.52, GOLD, 16, { glow: 0.1, spec: 0.4 });
       cyl(1.6, 0.9, 1.1, 1.3, MARBLE, 10, { glow: 0.25 });
       // Rotating eight-rayed sun on top (not merged, so it can spin).
       const sun = new TransformNode('sun', scene);
@@ -454,7 +495,7 @@ function buildProp(scene: Scene, p: Prop, h: TransformNode, add: AddFn, spinners
     }
     case 'folkPlinth': {
       box(p.w, p.h, p.d, p.h / 2, '#2a2438', { glow: 0.2 });
-      box(p.w + 0.1, 0.06, p.d + 0.1, p.h, '#9b6bd6', { glow: 0.6 });
+      box(p.w + 0.1, 0.06, p.d + 0.1, p.h, '#7d55c7', { glow: 0.3 });
       if ((p.variant ?? 0) === 0) {
         // Stylised horse-headed silhouette hinting at the Tikbalang legend.
         cyl(0.9, 0.3, 0.4, p.h + 0.45, '#1c1726', 8);

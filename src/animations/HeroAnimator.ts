@@ -44,6 +44,8 @@ export class HeroAnimator {
   private phase = 0;
   private moveBlend = 0;
   private time = Math.random() * 10;
+  /** Fired each time a foot lands while moving (footstep sound). */
+  onStep: (() => void) | null = null;
   /** Distance per full stride cycle (two steps). */
   private readonly stride = 1.35;
 
@@ -81,7 +83,10 @@ export class HeroAnimator {
     const ratio = clamp(speed / Math.max(maxSpeed, 0.001), 0, 1.4);
     this.moveBlend += (ratio - this.moveBlend) * damp(12, dt);
     const m = clamp(this.moveBlend, 0, 1.4);
+    const before = Math.floor(this.phase / Math.PI);
     this.phase += (speed * dt * Math.PI * 2) / this.stride;
+    // sin(phase) crosses zero twice per cycle: once per footfall.
+    if (this.state === 'locomotion' && m > 0.25 && Math.floor(this.phase / Math.PI) !== before) this.onStep?.();
 
     if (this.state !== 'defeated' && r.body.rotation.x !== 0) {
       r.body.rotation.x = 0;

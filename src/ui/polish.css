@@ -1,0 +1,342 @@
+/*
+ * Polish layer (loaded after styles.css): self-hosted fonts, the icon set, the brand loading
+ * screen, and the small fixes that make the UI read as one designed system on every phone.
+ */
+
+/* ── Fonts: shipped with the game (OFL), so the UI looks the same offline and on school Wi-Fi ── */
+@font-face {
+  font-family: 'Baloo 2';
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/baloo-2-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Baloo 2';
+  font-weight: 800;
+  font-display: swap;
+  src: url('../assets/fonts/baloo-2-latin-800-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/poppins-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/poppins-latin-600-normal.woff2') format('woff2');
+}
+
+/* ── Icons (ui/icons.ts) ── */
+.ic {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  fill: currentColor;
+  flex: none;
+}
+.ic-coin,
+.ic-trophy,
+.ic-medal,
+.ic-sparkle,
+.ic-sun,
+.ic-bolt,
+.ic-crown,
+.ic-star,
+.ic-stars,
+.ic-burst {
+  color: var(--gold);
+}
+.ic-hiyas {
+  color: #6fd3ff;
+}
+.ic-heart {
+  color: #ff5a6e;
+}
+.ic-fire {
+  color: #ff9a3d;
+}
+.ic-done {
+  color: #7be08a;
+}
+.ic-warning {
+  color: #ffd23f;
+}
+/* On gold surfaces the tinted icons would vanish: inherit the dark ink instead. */
+.btn.primary .ic,
+.play-btn .ic,
+.mult .ic,
+.hc-level .ic,
+.load-start .ic,
+.ex-icon .ic,
+.ex-chip .ic,
+.float .ic,
+.tip-ok .ic {
+  color: inherit;
+}
+/* Icon tiles: big glyph in the game's gold. */
+.side-btn span .ic {
+  color: var(--gold);
+  width: 1.05em;
+  height: 1.05em;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.35));
+}
+.icon-btn {
+  letter-spacing: 0;
+  display: inline-grid;
+  place-items: center;
+}
+.icon-btn .ic {
+  width: 22px;
+  height: 22px;
+  vertical-align: 0;
+}
+.gb-ico .ic {
+  color: var(--cream);
+}
+.ep-icon .ic,
+.tip-icon .ic,
+.mg-icon .ic {
+  color: var(--gold);
+}
+.ex-icon .ic {
+  color: #4a2c08;
+}
+.col-tab .ic {
+  margin-right: 4px;
+}
+.hint .ic {
+  color: var(--gold);
+}
+.gd-empty .ic {
+  color: var(--cream);
+}
+
+/* Locked ability: padlock above the level it unlocks at. */
+.ab-lock {
+  display: none;
+}
+.ability-btn.locked .ab-lock {
+  display: block;
+  position: absolute;
+  top: 17px;
+  left: 0;
+  right: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--cream);
+  z-index: 1;
+}
+.ability-btn.locked::after {
+  padding-top: 26px;
+}
+
+/* ── Loading screen ── */
+#loading {
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 42%, #2b3d8f, #1f2d6b 42%, var(--midnight) 82%);
+}
+.load-rays {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 160vmax;
+  height: 160vmax;
+  margin: -80vmax 0 0 -80vmax;
+  background: repeating-conic-gradient(from 0deg, rgba(242, 193, 78, 0.07) 0deg 11.25deg, transparent 11.25deg 22.5deg);
+  mask-image: radial-gradient(circle, #000 0, transparent 46%);
+  -webkit-mask-image: radial-gradient(circle, #000 0, transparent 46%);
+  animation: spin 60s linear infinite;
+}
+.load-card {
+  position: relative;
+  width: min(520px, 88vw);
+}
+.load-card h1.load-logo {
+  margin: 0;
+  font-size: 0;
+  line-height: 0;
+  text-shadow: none;
+}
+.load-logo svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 52vh;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
+  animation: logo-in 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.load-tag {
+  margin: 2px 0 16px;
+  font: 600 14px/1.3 var(--font-body);
+  letter-spacing: 0.4px;
+  color: var(--cream);
+  opacity: 0.8;
+}
+.load-track {
+  width: min(340px, 74vw);
+  height: 10px;
+  margin: 0 auto;
+  border-width: 0;
+  background: rgba(8, 10, 26, 0.55);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(242, 193, 78, 0.35);
+}
+#load-bar {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-deep), #ffe08a);
+  box-shadow: 0 0 12px rgba(242, 193, 78, 0.6);
+}
+#load-label {
+  margin: 10px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+.load-start {
+  margin-top: 6px;
+  letter-spacing: 0.6px;
+  box-shadow: 0 5px 0 #8a5a14, 0 12px 26px rgba(0, 0, 0, 0.4);
+}
+@keyframes logo-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+}
+@media (max-height: 420px) {
+  .load-logo svg {
+    max-height: 56vh;
+  }
+  .load-tag {
+    margin-bottom: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .load-rays,
+  .load-logo svg {
+    animation: none;
+  }
+}
+
+/* ── HUD ── */
+.score-line::before {
+  content: 'SCORE';
+  font: 800 10px/1 var(--font-display);
+  letter-spacing: 1.2px;
+  color: var(--gold);
+  opacity: 0.9;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  align-self: flex-end;
+  margin-bottom: 4px;
+}
+.score {
+  -webkit-text-stroke: 1px rgba(15, 20, 48, 0.55);
+  paint-order: stroke fill;
+}
+.exp-chip .ic,
+.id-chip .ic {
+  color: var(--gold);
+}
+
+/* ── Panels never run off a short (landscape phone) screen ── */
+.panel {
+  max-height: calc(100dvh - 16px - var(--safe-top) - var(--safe-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(242, 193, 78, 0.5) transparent;
+}
+.panel h2 .ic {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+/* Results on a landscape phone: numbers on the left, rewards and buttons on the right. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .results .panel {
+    width: min(680px, calc(100vw - 32px));
+  }
+  .results .res-sub {
+    margin-bottom: 10px;
+  }
+  .res-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 18px;
+    align-items: center;
+  }
+  .res-main .stats {
+    grid-template-columns: 1fr 1fr;
+  }
+  .res-side .r-levels {
+    margin-top: 0;
+  }
+  .res-side .btn:first-of-type {
+    margin-top: 8px;
+  }
+}
+
+/* ── Lobby on a landscape phone: the left buttons sit under the profile, clear of the hero card ── */
+@media (max-height: 460px) and (min-width: 640px) {
+  .lb-left {
+    top: calc(64px + var(--safe-top));
+    transform: none;
+    flex-direction: row;
+    gap: 8px;
+  }
+  .lb-left .side-btn {
+    padding: 6px 4px 5px;
+  }
+}
+
+/* ── Small motion: numbers pop when they go up, results tiles arrive one by one ── */
+.bump {
+  animation: bump 0.22s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.results:not([hidden]) .stats > div {
+  animation: tile-in 0.32s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.results .stats > div:nth-child(2) { animation-delay: 0.06s; }
+.results .stats > div:nth-child(3) { animation-delay: 0.12s; }
+.results .stats > div:nth-child(4) { animation-delay: 0.18s; }
+@keyframes tile-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.92); }
+}
+/* A slow shine across PLAY: the one button the eye should land on. */
+.play-btn {
+  position: relative;
+  overflow: hidden;
+}
+.play-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-18deg);
+  animation: shine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes shine {
+  0%, 55% { left: -60%; }
+  100% { left: 130%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bump,
+  .results:not([hidden]) .stats > div,
+  .play-btn::after {
+    animation: none;
+  }
+}
+body.reduced-fx .play-btn::after {
+  animation: none;
+}

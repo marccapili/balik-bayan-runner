@@ -73,6 +73,9 @@ export const GUARD = {
 
 /** Game-feel numbers (screen shake, blink, game-over beat). */
 export const FEEDBACK = {
+  /** Hit-stop: for this many real seconds after a hit the world runs at `hitStopScale` (impact beat). */
+  hitStop: 0.09,
+  hitStopScale: 0.05,
   hitShake: 0.35,
   hitShakeSeconds: 0.3,
   /** Invulnerability blink frequency (on/off cycles per second). */

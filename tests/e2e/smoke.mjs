@@ -668,7 +668,7 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
   };
   await until((s) => s.guards.length >= 1);
   check('HUD shows exhibit progress 0/15', /0\s*\/\s*15/.test(await page.textContent('.exp-chip')));
-  check('Bonifacio Lv1: ability is locked until Lv5', (await snap(page)).abilityLocked && /Lv5/.test((await page.getAttribute('.ability-btn', 'data-left')) ?? ''));
+  check('Bonifacio Lv1: ability is locked until Lv5', (await snap(page)).abilityLocked && /Lv\s*5/.test((await page.getAttribute('.ability-btn', 'data-left')) ?? ''));
   await page.evaluate(() => {
     window.__bbr.debug.setInvulnerable(1e6);
     window.__bbr.debug.teleport(25, 4.9);

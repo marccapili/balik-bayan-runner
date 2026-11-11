@@ -1,3 +1,4 @@
+import { icon } from './icons';
 import { BAYBAYIN_CHART } from '../data/baybayinChart';
 import { GADGET_INFO, type GadgetKind } from '../data/gadgets';
 import { gadgetIconUrl } from './gadgetArt';
@@ -73,6 +74,13 @@ export { formatTime };
 /** In-run buttons that must work while another finger holds the joystick (multi-touch). */
 const TOUCH_DOWN_ACTS = new Set(['ability', 'gadget', 'interact', 'drop', 'pause']);
 
+/** Restarts the little "pop" on a HUD number when it goes up. */
+function bump(el: HTMLElement): void {
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
+}
+
 export class Hud {
   private readonly root: HTMLElement;
   private readonly roomToast: HTMLElement;
@@ -134,7 +142,7 @@ export class Hud {
       </button>
       <div class="gadget-fx" aria-live="polite"></div>
       <button class="ability-btn" data-act="ability" aria-label="Use ability">
-        <span class="ab-icon"></span><span class="ab-name"></span><span class="ab-key">Space</span>
+        <span class="ab-icon"></span><span class="ab-lock">${icon('lock')}</span><span class="ab-name"></span><span class="ab-key">Space</span>
       </button>
       <button class="exhibit-prompt" data-act="interact" hidden>
         <span class="ep-icon">📖</span>
@@ -180,18 +188,24 @@ export class Hud {
           <h2>Huli ka, bes! 😵</h2>
           <p class="res-sub">Na-escort ka palabas ng museo. Babawi tayo!</p>
           <div class="new-best" hidden>🏆 NEW BEST! Sheesh!</div>
-          <dl class="stats">
-            <div><dt>Score</dt><dd class="r-score">0</dd></div>
-            <div><dt>Oras</dt><dd class="r-time">0:00</dd></div>
-            <div><dt>Coins</dt><dd class="r-coins">0</dd></div>
-            <div><dt>Exhibits</dt><dd class="r-exhibits">0/15</dd></div>
-          </dl>
-          <p class="r-best-line">Best: <b class="r-best">0</b></p>
-          <ul class="r-levels"></ul>
-          <ul class="r-missions" hidden></ul>
-          <p class="wallet">Wallet mo: <b class="r-wallet">0</b> coins</p>
-          <button class="btn primary" data-act="replay">Laro ulit! 🔁</button>
-          <button class="btn" data-act="lobby">Lobby 🏠</button>
+          <div class="res-cols">
+            <div class="res-main">
+              <dl class="stats">
+                <div><dt>Score</dt><dd class="r-score">0</dd></div>
+                <div><dt>Oras</dt><dd class="r-time">0:00</dd></div>
+                <div><dt>Coins</dt><dd class="r-coins">0</dd></div>
+                <div><dt>Exhibits</dt><dd class="r-exhibits">0/15</dd></div>
+              </dl>
+              <p class="r-best-line">Best: <b class="r-best">0</b></p>
+              <p class="wallet">Wallet mo: <b class="r-wallet">0</b> coins</p>
+            </div>
+            <div class="res-side">
+              <ul class="r-levels"></ul>
+              <ul class="r-missions" hidden></ul>
+              <button class="btn primary" data-act="replay">Laro ulit! 🔁</button>
+              <button class="btn" data-act="lobby">Lobby 🏠</button>
+            </div>
+          </div>
         </div>
       </div>`;
     host.appendChild(this.root);
@@ -462,8 +476,14 @@ export class Hud {
         }
       });
     }
-    if (s.score !== l.score) this.score.textContent = s.score.toLocaleString('en-US');
-    if (s.coins !== l.coins) this.coins.textContent = String(s.coins);
+    if (s.score !== l.score) {
+      this.score.textContent = s.score.toLocaleString('en-US');
+      if (s.score > l.score) bump(this.score);
+    }
+    if (s.coins !== l.coins) {
+      this.coins.textContent = String(s.coins);
+      if (s.coins > l.coins) bump(this.coins.parentElement ?? this.coins);
+    }
     const sec = Math.floor(s.time);
     if (sec !== Math.floor(l.time)) this.timer.textContent = formatTime(s.time);
     if (s.multiplier !== l.multiplier) {
@@ -490,7 +510,7 @@ export class Hud {
     if (lockedUntil > 0) {
       b.style.setProperty('--cd', '0');
       b.classList.remove('ready', 'active', 'long');
-      b.dataset.left = `🔒Lv${lockedUntil}`;
+      b.dataset.left = `Lv ${lockedUntil}`;
       return;
     }
     b.style.setProperty('--cd', String(frac));

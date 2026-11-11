@@ -3,6 +3,7 @@ import type { Exhibit } from '../data/exhibits';
 import { BAYBAYIN, MINIGAME, MINIGAME_INFO, WIRE_COLORS } from '../data/minigames';
 import { BaybayinMatch, CodeLock, DustGrid, makeRoute, RouteGame, SwapPuzzle, swipeVerdict, TimelineSort, WiresGame, type Pt } from '../gameplay/MiniGames';
 import { esc } from './exhibitHtml';
+import { drawIcon, iconForEmoji } from './icons';
 
 export type MiniSound = 'click' | 'good' | 'bad' | 'win';
 
@@ -29,6 +30,7 @@ export class MiniGameHost {
   private cleanup: Array<() => void> = [];
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
   private msgTimer = 0;
+  private msgText = '';
 
   constructor(
     host: HTMLElement,
@@ -152,9 +154,11 @@ export class MiniGameHost {
 
   private say(text: string, kind: 'good' | 'bad' | '' = ''): void {
     this.msg.textContent = text;
+    this.msgText = text;
     this.msg.className = `mg-msg ${kind}`;
     window.clearTimeout(this.msgTimer);
-    if (kind === 'bad') this.msgTimer = window.setTimeout(() => this.msg.textContent === text && this.say(''), 1600);
+    // Compare the string we set: the DOM text loses its emoji when icons.ts swaps them for SVG.
+    if (kind === 'bad') this.msgTimer = window.setTimeout(() => this.msgText === text && this.say(''), 1600);
   }
 
   private bad(text: string): void {
@@ -433,8 +437,13 @@ export class MiniGameHost {
     x.strokeRect(size * 0.05, size * 0.05, size * 0.9, size * 0.9);
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.font = `${size * 0.42}px serif`;
-    x.fillText(e.icon, size / 2, size * 0.44);
+    const glyph = iconForEmoji(e.icon);
+    if (glyph) drawIcon(x, glyph, size / 2, size * 0.42, size * 0.42, '#fff6e0');
+    else {
+      x.fillStyle = '#fff6e0';
+      x.font = `${size * 0.42}px serif`;
+      x.fillText(e.icon, size / 2, size * 0.44);
+    }
     x.fillStyle = '#fff6e0';
     x.font = `bold ${size * 0.07}px sans-serif`;
     const t = e.title.length > 26 ? `${e.title.slice(0, 25)}…` : e.title;
@@ -506,7 +515,8 @@ export class MiniGameHost {
       ctx.fillStyle = 'rgba(60,50,40,0.75)';
       ctx.font = 'bold 18px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('🧹 kuskusin dito', cv.width / 2, cv.height / 2);
+      ctx.fillText('kuskusin dito', cv.width / 2 + 14, cv.height / 2);
+      drawIcon(ctx, 'broom', cv.width / 2 - 62, cv.height / 2 - 6, 24, 'rgba(60,50,40,0.75)');
     }
     let last: Pt | null = null;
     const rub = (p: Pt): void => {

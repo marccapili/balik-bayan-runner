@@ -49,3 +49,23 @@ export const RENDER_CONFIG = {
   maxPixelRatio: 2,
   lowQualityPixelRatio: 1,
 } as const;
+
+/** The shared "look": light balance, baked sun shadows and the colour grade (world/SceneLook.ts). */
+export const LOOK = {
+  /** Sky fill from above; kept under the key light so shapes read as lit, not flat. */
+  fillIntensity: 0.42,
+  keyIntensity: 0.8,
+  /** Direction the sunlight travels (from behind the camera's left shoulder). */
+  keyDirection: { x: -0.52, y: -1, z: 0.34 },
+  /** Colour grade applied in the material shaders (no extra render pass). */
+  contrast: 1.14,
+  exposure: 1.03,
+  /** Screen-edge darkening: 0 = none. */
+  vignetteWeight: 1.6,
+  vignetteColor: '#0b0f26',
+  /** Baked world shadows (High quality): map size in pixels and how dark they get (0 = black). */
+  shadowMapSize: 2048,
+  shadowDarkness: 0.3,
+  /** Frames the shadow map keeps redrawing before it is frozen (lets shaders finish compiling). */
+  shadowBakeFrames: 20,
+} as const;

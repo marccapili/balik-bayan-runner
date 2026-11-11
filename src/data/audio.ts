@@ -44,3 +44,21 @@ export const MUSIC = {
   /** Music drags a little while the world is in slow motion (mini-games, the objective card). */
   slowMoTempo: 0.8,
 } as const;
+
+/** The shared mix: every sound and the music pass through one hall reverb and a limiter. */
+export const MIX = {
+  /** Length of the museum-hall echo, seconds, and how quickly it dies away (higher = shorter tail). */
+  reverbSeconds: 1.5,
+  reverbDecay: 3.2,
+  /** How much of the sound effects / the music is sent into the hall. */
+  sfxReverb: 0.22,
+  musicReverb: 0.14,
+  /** Limiter so stacked effects (coins + hit + ability) never clip. */
+  limiter: { threshold: -12, knee: 10, ratio: 6, attack: 0.003, release: 0.18 },
+  /** Coins collected within this many seconds climb one scale step each, up to `coinStreakSteps`. */
+  coinStreakWindow: 1.1,
+  coinStreakSteps: 7,
+  /** Footsteps: level, and the fastest they may repeat (seconds). */
+  stepGain: 0.07,
+  stepMinGap: 0.12,
+} as const;
