@@ -329,7 +329,7 @@ export class Game {
     this.applyPixelRatio();
     this.engine.resize();
     this.museum?.setGlow(this.highQuality && !s.reducedEffects);
-    this.museum?.setShadows(s.quality !== 'low');
+    this.museum?.setShadows(this.highQuality);
     this.hud?.setFpsVisible(s.showFps);
     document.body.classList.toggle('large-text', s.largeText);
     this.sfx.setMuted(s.muted);
