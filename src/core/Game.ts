@@ -59,10 +59,15 @@ export class Game {
   private transition: Transition | null = null;
   readonly save = new SaveManager();
   readonly sfx = new Sfx();
-  readonly music = new Music(() => this.sfx.context);
+  readonly music = new Music(
+    () => this.sfx.context,
+    () => this.sfx.mixBus,
+  );
   /** First-run coach tips (null when done / not this run). */
   private tutorial: Tutorial | null = null;
   private tut = { moved: 0, opened: false, usedGadget: false, last: { x: 0, z: 0 } };
+  /** Seconds of hit-stop left (the world crawls for a beat after the hero is caught). */
+  private hitStopLeft = 0;
   /** ?play (tests/dev) skips the tips unless ?tutorial is set. */
   private readonly noTutorial = new URLSearchParams(location.search).has('play') && !new URLSearchParams(location.search).has('tutorial');
   /** Total simulated (unpaused) time across runs — used by tests. */
@@ -212,6 +217,9 @@ export class Game {
       if (!this.trainingHero) this.hud?.showRoom(`📍 ${r.sign}`, r.subtitle);
     };
     this.museum.onEvent = (e) => this.onRunEvent(e);
+    this.museum.player.onStep = () => {
+      if (this.fsm.state === 'playing') this.sfx.play('step');
+    };
     // Markers show what's cleared in *this* run (Exhibit Mode); the Archive keeps the all-time list.
     this.museum.isDiscovered = (id) => !!this.museum?.run.read.has(id);
     this.museum.perksFor = (id) => heroPerks(this.save.heroLevel(id));
@@ -321,6 +329,7 @@ export class Game {
     this.applyPixelRatio();
     this.engine.resize();
     this.museum?.setGlow(this.highQuality && !s.reducedEffects);
+    this.museum?.setShadows(s.quality !== 'low');
     this.hud?.setFpsVisible(s.showFps);
     document.body.classList.toggle('large-text', s.largeText);
     this.sfx.setMuted(s.muted);
@@ -615,8 +624,11 @@ export class Game {
       } else if (interact && this.museum.nearChart) {
         this.openChart();
       } else {
-        this.simTime += dt;
-        this.museum.update(dt);
+        // Hit-stop: the frame "sticks" for a beat when the hero is caught, so the hit has weight.
+        const k = this.hitStopLeft > 0 ? FEEDBACK.hitStopScale : 1;
+        this.hitStopLeft = Math.max(0, this.hitStopLeft - dt);
+        this.simTime += dt * k;
+        this.museum.update(dt * k);
         this.pushStats();
         const n = this.museum.nearExhibit;
         if (!n && this.museum.nearChart) this.hud?.setChartPrompt();
@@ -859,6 +871,7 @@ export class Game {
       }
       case 'hit':
         this.sfx.play('hit');
+        if (!this.save.data.settings.reducedEffects) this.hitStopLeft = FEEDBACK.hitStop;
         hud?.flashHurt();
         if (this.mini?.active) {
           this.closeMini();

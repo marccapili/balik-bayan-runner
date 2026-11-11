@@ -20,6 +20,8 @@ export class Player {
   readonly motor: PlayerMotor;
   private rig: HeroRig;
   private animator: HeroAnimator;
+  /** A foot touched the floor (run cycle); the Game plays the footstep. */
+  onStep: (() => void) | null = null;
   private readonly shadow: Mesh;
   /** Height above the floor (only non-zero during the intro hover/fall). */
   private airY = 0;
@@ -33,6 +35,7 @@ export class Player {
     this.motor = new PlayerMotor(start, world);
     this.rig = buildHero(scene, heroId);
     this.animator = new HeroAnimator(this.rig);
+    this.animator.onStep = () => this.onStep?.();
 
     this.shadow = CreateGround('heroShadow', { width: 1.2, height: 1.2 }, scene);
     const sm = new StandardMaterial('heroShadowMat', scene);
@@ -64,6 +67,7 @@ export class Player {
     disposeHero(this.rig);
     this.rig = buildHero(this.scene, id, skin);
     this.animator = new HeroAnimator(this.rig);
+    this.animator.onStep = () => this.onStep?.();
     this.syncVisual();
   }
 

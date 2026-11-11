@@ -5,23 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0f1430" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Balik Bayan" />
     <title>Balik Bayan Runner</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>" />
+    <meta name="description" content="Takbo, bayani! Isang 3D arcade game kung saan tumatakas ang mga bayaning Pilipino sa isang museo habang tinutuklas ang totoong kasaysayan." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Balik Bayan Runner" />
+    <meta property="og:description" content="Takbo, bayani! Tumakas sa mga guard ng museo at tuklasin ang kasaysayan ng Pilipinas." />
+    <meta property="og:image" content="https://marccapili.github.io/balik-bayan-runner/share.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon-180.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
   </head>
   <body>
     <canvas id="game" touch-action="none"></canvas>
     <div id="touch-zone"></div>
     <div id="ui"></div>
     <div id="loading">
+      <div class="load-rays" aria-hidden="true"></div>
       <div class="load-card">
-        <div class="load-sun">☀</div>
-        <h1>Balik Bayan <span>Runner</span></h1>
+        <h1 class="load-logo"><!--bbr:logo--></h1>
+        <p class="load-tag">Takbo, bayani. Tuklasin ang kasaysayan.</p>
         <div class="load-track"><div id="load-bar"></div></div>
         <p id="load-label">Loading…</p>
-        <button class="load-start" id="load-start" type="button">TAP PARA MAGSIMULA ▶</button>
+        <button class="load-start" id="load-start" type="button">TAP PARA MAGSIMULA</button>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

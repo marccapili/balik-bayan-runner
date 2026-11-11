@@ -1,5 +1,15 @@
 # Development changelog
 
+## M8 polish pass 1: "make it look like a professional game" — 2026-11-11 (owner request)
+- **One icon set instead of emoji.** Every emoji in the UI (about 85 different ones) is now a Phosphor "fill" icon drawn as inline SVG, so the game looks the same on every phone. `ui/icons.ts#installIconizer` swaps emoji for icons wherever they land in the DOM; copy can keep an emoji as its icon tag. Canvas art (mini-game tiles, 3D plaques) uses `drawIcon`. Add an icon: one row in `tools/build_icons.mjs`, then run it.
+- **Brand.** New logo (eight-ray sun, BALIK BAYAN wordmark, RUNNER ribbon) from `tools/build_logo.py`, written straight into the loading screen by a small Vite plugin. New loading screen with slow sun rays. App icon, home-screen manifest, and a link-preview image (`public/share.png`) for when the link is shared in a chat.
+- **Fonts ship with the game** (Baloo 2, Poppins): no Google Fonts request, no flash of the fallback font, works offline.
+- **3D look.** `world/SceneLook.ts`: baked sun shadows under walls, plinths, benches and statues (drawn once, then only sampled; on unless Graphics = Low), a stronger key light and softer fill so shapes read, and a colour grade with a soft vignette inside the material shaders (no extra render pass). Plinths get a navy velvet top with a brass rim instead of flat orange; statues have shoulders, two arms and a base; brass trim no longer clips to orange. Numbers in `data/config.ts#LOOK`.
+- **Sound.** All effects and the music now pass through one mix bus (`audio/Sfx.ts`): a short museum-hall reverb and a limiter. Coins, alerts, clicks and the "denied" buzz use softer bell and triangle voices instead of square waves; coins picked up quickly climb the music's pentatonic scale; the hero has footsteps; a hit has a body thump. Numbers in `data/audio.ts#MIX`.
+- **Game feel.** A 0.09 s hit-stop when the hero is caught (off with Reduced Effects), HUD numbers pop when they go up, results tiles arrive one by one, PLAY has a slow shine.
+- **Phone fixes.** The results panel no longer runs off a landscape phone (two columns), every panel scrolls instead of clipping, and the lobby's Shop / Archive buttons no longer sit under the hero card.
+- Not measured on a real phone yet: the shadow and reverb cost. Headless runs are CPU-rendered, so they say nothing about FPS.
+
 ## Future Heroes Gallery — 2026-11-05 (owner: the class's "Ang Aking Ambag" website lives inside the game)
 - Lobby event banner "✨ Future Heroes Gallery / Ambag ng klase sa kasaysayan, tara!" (glow + pulse, NEW badge until first visit) → portal → a calm museum hall (new FSM state `gallery`; no enemies, coins or rewards).
 - 16 classmates' works, alphabetical by surname: multi-page / multi-file works are books on lecterns (one file = one page, 3D page-turn like an e-book, two-page spreads on wide screens, swipe / ‹ › / arrow keys, tap to zoom); one-pagers are scrolls that unroll. Vargas's 8 s video is a page in their book.

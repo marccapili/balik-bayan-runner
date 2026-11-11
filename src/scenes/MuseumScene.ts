@@ -33,6 +33,8 @@ import { SurvivalRun, type AbilityPerks, type RunEvent } from '../gameplay/Survi
 import { CollisionWorld } from '../physics/Collision';
 import { dampAngle, type Vec2 } from '../utils/math';
 import { Fx } from '../world/Fx';
+import { applyGrade, BakedShadows, keyDirection } from '../world/SceneLook';
+import { LOOK } from '../data/config';
 import { buildMuseum, type MuseumBuild } from '../world/MuseumBuilder';
 import { PickupViews } from '../world/PickupViews';
 import type { GameScene } from './GameScene';
@@ -64,6 +66,7 @@ export class MuseumScene implements GameScene {
   private readonly guide: GuideViews;
   private readonly gadgetViews: GadgetViews;
   private glow: GlowLayer | null = null;
+  private readonly shadows: BakedShadows;
   /** Where the floor arrow points (null in training / endless). */
   guideTo: GuideTarget | null = null;
   /** Hero-level ability perks for a hero (set by the Game; full strength by default). */
@@ -94,15 +97,19 @@ export class MuseumScene implements GameScene {
     scene.autoClear = true;
 
     const hemi = new HemisphericLight('hemi', new Vector3(0.2, 1, -0.3), scene);
-    hemi.intensity = 0.72;
+    hemi.intensity = LOOK.fillIntensity;
     hemi.diffuse = new Color3(1, 0.95, 0.86);
     hemi.groundColor = new Color3(0.36, 0.3, 0.38);
     hemi.specular = new Color3(0.2, 0.2, 0.2);
-    const sun = new DirectionalLight('key', new Vector3(-0.45, -1, 0.35), scene);
-    sun.intensity = 0.42;
-    sun.diffuse = new Color3(1, 0.9, 0.75);
+    const sun = new DirectionalLight('key', keyDirection(), scene);
+    sun.intensity = LOOK.keyIntensity;
+    sun.diffuse = new Color3(1, 0.92, 0.8);
+    applyGrade(scene);
 
     this.museum = buildMuseum(scene);
+    this.shadows = new BakedShadows(scene, sun, { x: 0, z: 0 });
+    this.shadows.addCasters(this.museum.casters);
+    this.shadows.addReceivers(this.museum.receivers);
     const boxes = buildColliders();
     this.world = new CollisionWorld(boxes);
     this.player = new Player(scene, this.world, SPAWN_POINT, heroId);
@@ -177,6 +184,11 @@ export class MuseumScene implements GameScene {
     g.intensity = 0.3;
     for (const m of [...this.pickupViews.glowMeshes, ...this.exhibitMarkers.glowMeshes]) g.addIncludedOnlyMesh(m);
     this.gadgetViews.onMesh = (m) => g.addIncludedOnlyMesh(m);
+  }
+
+  /** High quality: baked sun shadows under walls and props. Low: blob shadows only. */
+  setShadows(on: boolean): void {
+    this.shadows.setEnabled(on);
   }
 
   useAbility(): boolean {
@@ -437,6 +449,7 @@ export class MuseumScene implements GameScene {
     for (const pool of this.viewPool.values()) for (const v of pool) v.dispose();
     for (const d of this.decoyViews) d.dispose();
     this.fx.dispose();
+    this.shadows.dispose();
     this.museum.dispose();
     this.scene.dispose();
   }

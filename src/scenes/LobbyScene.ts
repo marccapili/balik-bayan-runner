@@ -24,6 +24,7 @@ import { LOBBY } from '../data/lobby';
 import { damp } from '../utils/math';
 import { mat } from '../world/materials';
 import { blobShadow, capizTexture, floorTiles, sunMedallion } from '../world/textures';
+import { applyGrade } from '../world/SceneLook';
 import type { GameScene } from './GameScene';
 
 const HERO_SCALE = 1.25;
@@ -60,6 +61,7 @@ export class LobbyScene implements GameScene {
     scene.skipPointerMovePicking = true;
     scene.ambientColor = new Color3(0.3, 0.28, 0.35);
 
+    applyGrade(scene);
     const hemi = new HemisphericLight('lobbyHemi', new Vector3(0.1, 1, -0.4), scene);
     hemi.intensity = 0.78;
     hemi.diffuse = new Color3(1, 0.93, 0.84);

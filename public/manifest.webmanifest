@@ -1,0 +1,17 @@
+{
+  "name": "Balik Bayan Runner",
+  "short_name": "Balik Bayan",
+  "description": "Takbo, bayani! Tumakas sa mga guard ng museo at tuklasin ang kasaysayan ng Pilipinas.",
+  "lang": "fil",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0f1430",
+  "theme_color": "#0f1430",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

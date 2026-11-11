@@ -8,7 +8,9 @@ All visuals in Milestone 1 are generated in code — no third-party models, text
 | Hero models (Gabriela; fallback for all) | Procedural, `src/characters/HeroModel.ts`, based on the team's own character sheets | Project-owned |
 | Museum geometry & props | Procedural, `src/world/MuseumBuilder.ts` | Project-owned |
 | Floor, sign, banner, capiz, portrait textures | Canvas-drawn, `src/world/textures.ts` | Project-owned |
-| Fonts | Baloo 2, Poppins via Google Fonts | SIL Open Font License |
+| Fonts (`src/assets/fonts/baloo-2-*.woff2`, `poppins-*.woff2`) | Baloo 2, Poppins (latin subset) via @fontsource 5, shipped with the game (no Google Fonts request) | SIL Open Font License (`OFL-Baloo2.txt`, `OFL-Poppins.txt`) |
+| UI icons (`src/ui/iconData.ts`) | Phosphor Icons 2.1.1, "fill" weight; only the ~90 paths we use, copied by `tools/build_icons.mjs` | MIT, © Phosphor Icons |
+| Logo + app icon (`src/assets/brand/logo.svg`, `public/icon*.{svg,png}`, `public/share.png`) | Drawn by `tools/build_logo.py` (Baloo 2 outlines + the eight-ray sun), PNGs by `tools/render_brand.mjs` | Project-owned (lettering from an OFL font) |
 | Sound effects | Synthesised at runtime with Web Audio, `src/audio/Sfx.ts` | Project-owned |
 | Background music (lobby + museum loops) | Original procedural compositions, `src/audio/Music.ts` + `src/data/audio.ts` (kulintang-inspired, not transcriptions) | Project-owned |
 | Gadget icons | Original pixel art drawn in code, `src/ui/gadgetArt.ts` | Project-owned |

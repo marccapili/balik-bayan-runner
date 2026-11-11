@@ -1,4 +1,4 @@
-import { MUSIC, type MusicTrack } from '../data/audio';
+import { MIX, MUSIC, type MusicTrack } from '../data/audio';
 
 /**
  * Original procedural background music (Web Audio, no files, no licensing).
@@ -20,13 +20,26 @@ export class Music {
   private volume: number = MUSIC.defaultVolume;
   private muted = false;
 
-  constructor(private readonly ctxOf: () => AudioContext | null) {}
+  /**
+   * `busOf` = the game's shared mix (limiter + hall reverb, owned by Sfx). Without it the music
+   * goes straight to the speakers.
+   */
+  constructor(
+    private readonly ctxOf: () => AudioContext | null,
+    private readonly busOf: () => { dry: AudioNode; wet: AudioNode } | null = () => null,
+  ) {}
 
   private bus(ctx: AudioContext): GainNode {
     if (!this.out) {
       this.out = ctx.createGain();
       this.out.gain.value = 0;
-      this.out.connect(ctx.destination);
+      const mix = this.busOf();
+      this.out.connect(mix ? mix.dry : ctx.destination);
+      if (mix) {
+        const send = ctx.createGain();
+        send.gain.value = MIX.musicReverb;
+        this.out.connect(send).connect(mix.wet);
+      }
     }
     return this.out;
   }

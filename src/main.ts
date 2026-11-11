@@ -1,11 +1,14 @@
 import './ui/styles.css';
+import './ui/polish.css';
 import { Game } from './core/Game';
+import { installIconizer } from './ui/icons';
 
 const bar = document.getElementById('load-bar') as HTMLElement;
 const label = document.getElementById('load-label') as HTMLElement;
 const loading = document.getElementById('loading') as HTMLElement;
 
 if (window.matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch-device');
+installIconizer();
 
 async function boot(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;

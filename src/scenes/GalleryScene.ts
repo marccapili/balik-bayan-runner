@@ -24,8 +24,10 @@ import type { HeroId } from '../data/heroes';
 import { galleryLayout, spotInReach, type GalleryLayout, type Spot } from '../gallery/galleryLayout';
 import { CollisionWorld } from '../physics/Collision';
 import type { Vec2 } from '../utils/math';
+import { drawIcon } from '../ui/icons';
 import { mat } from '../world/materials';
 import { floorTiles } from '../world/textures';
+import { applyGrade } from '../world/SceneLook';
 import type { GameScene } from './GameScene';
 
 const WOOD = '#8a5a2b';
@@ -89,6 +91,7 @@ export class GalleryScene implements GameScene {
     scene.clearColor = new Color4(0.06, 0.08, 0.18, 1);
     scene.ambientColor = new Color3(0.3, 0.28, 0.32);
     scene.skipPointerMovePicking = true;
+    applyGrade(scene);
     const hemi = new HemisphericLight('gHemi', new Vector3(0.2, 1, -0.3), scene);
     hemi.intensity = 0.78;
     hemi.diffuse = new Color3(1, 0.95, 0.86);
@@ -329,7 +332,10 @@ export class GalleryScene implements GameScene {
         ctx.fillText(work.title, 256, 150);
         ctx.font = '600 28px system-ui, sans-serif';
         ctx.fillStyle = 'rgba(255,246,223,0.75)';
-        ctx.fillText(style === 'book' ? `📖 ${work.pages.length} pahina` : '📜 Scroll', 256, 212);
+        const tag = style === 'book' ? `${work.pages.length} pahina` : 'Scroll';
+        const tagW = ctx.measureText(tag).width;
+        drawIcon(ctx, style === 'book' ? 'book' : 'scroll', 256 - tagW / 2 - 6, 202, 30, 'rgba(255,246,223,0.75)');
+        ctx.fillText(tag, 256 + 20, 212);
       }),
       0.55,
     );
@@ -436,8 +442,7 @@ export class GalleryScene implements GameScene {
         ctx.strokeRect(8, 8, 496, 320);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ffe08a';
-        ctx.font = '900 64px system-ui, sans-serif';
-        ctx.fillText('☀', 256, 92);
+        drawIcon(ctx, 'sun', 256, 68, 72, '#ffe08a');
         ctx.fillStyle = '#fff6df';
         fitText(ctx, GAME_PLAQUE.title.toUpperCase(), '900', 50, 24, 470);
         ctx.fillText(GAME_PLAQUE.title.toUpperCase(), 256, 170);

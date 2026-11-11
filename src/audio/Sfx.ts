@@ -1,13 +1,23 @@
+import { MIX, MUSIC } from '../data/audio';
+
 /**
- * Tiny synthesised sound effects (Web Audio, no files, no licensing).
+ * Synthesised sound effects (Web Audio, no files, no licensing).
  * The AudioContext is created on the first user gesture to satisfy autoplay rules.
+ * Everything runs through one mix bus: a short "museum hall" reverb (generated impulse)
+ * and a limiter, so sounds sit in the same room and never clip when they stack.
  */
-export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim' | 'bark' | 'growl' | 'whoo' | 'neigh' | 'thump' | 'poof' | 'page';
+export type SfxName = 'coin' | 'rare' | 'heart' | 'hit' | 'alert' | 'gameover' | 'bonus' | 'click' | 'portal' | 'drop' | 'land' | 'unlock' | 'sprint' | 'shield' | 'shockwave' | 'dash' | 'block' | 'denied' | 'claim' | 'bark' | 'growl' | 'whoo' | 'neigh' | 'thump' | 'poof' | 'page' | 'step';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private out: DynamicsCompressorNode | null = null;
+  private hall: ConvolverNode | null = null;
   private _muted = false;
+  private coinStreak = 0;
+  private lastCoinAt = -10;
+  private lastStepAt = -10;
+  private stepFlip = false;
   volume = 0.6;
 
   constructor() {
@@ -45,11 +55,57 @@ export class Sfx {
     if (this.ctx) return this.ctx;
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return null;
-    this.ctx = new AC();
-    this.master = this.ctx.createGain();
+    const ctx = (this.ctx = new AC());
+    // Limiter on the way out.
+    const out = (this.out = ctx.createDynamicsCompressor());
+    out.threshold.value = MIX.limiter.threshold;
+    out.knee.value = MIX.limiter.knee;
+    out.ratio.value = MIX.limiter.ratio;
+    out.attack.value = MIX.limiter.attack;
+    out.release.value = MIX.limiter.release;
+    out.connect(ctx.destination);
+    // Hall reverb: decaying noise is a cheap, convincing room.
+    const hall = (this.hall = ctx.createConvolver());
+    hall.buffer = hallImpulse(ctx, MIX.reverbSeconds, MIX.reverbDecay);
+    hall.connect(out);
+    this.master = ctx.createGain();
     this.master.gain.value = this._muted ? 0 : this.volume;
-    this.master.connect(this.ctx.destination);
-    return this.ctx;
+    this.master.connect(out);
+    const send = ctx.createGain();
+    send.gain.value = MIX.sfxReverb;
+    this.master.connect(send).connect(hall);
+    return ctx;
+  }
+
+  /** Where the music plugs in: the limiter (dry) and the hall (wet). Null before the first tap. */
+  get mixBus(): { dry: AudioNode; wet: AudioNode } | null {
+    return this.out && this.hall ? { dry: this.out, wet: this.hall } : null;
+  }
+
+  /** A struck-metal voice: sine partials with a fast shimmer on top (coins, chimes, UI). */
+  private bell(freq: number, start: number, dur: number, gain: number, bright = 0.3): void {
+    this.tone(freq, start, dur, 'sine', gain);
+    this.tone(freq * 2.0, start, dur * 0.6, 'sine', gain * 0.35);
+    this.tone(freq * 3.01, start, dur * 0.35, 'triangle', gain * bright);
+  }
+
+  /** Band-limited noise burst (cloth, feet, impacts). */
+  private burst(start: number, dur: number, gain: number, freq: number, q = 1): void {
+    const ctx = this.ctx!;
+    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    src.connect(f).connect(g).connect(this.master!);
+    src.start(start);
   }
 
   private tone(freq: number, start: number, dur: number, type: OscillatorType, gain: number, slideTo?: number): void {
@@ -90,33 +146,57 @@ export class Sfx {
     if (!ctx || ctx.state !== 'running') return;
     const t = ctx.currentTime;
     switch (name) {
-      case 'coin':
-        this.tone(988, t, 0.07, 'square', 0.08);
-        this.tone(1319, t + 0.06, 0.12, 'square', 0.08);
+      case 'coin': {
+        // Quick pickups climb the pentatonic scale of the music, so a coin trail plays a little run.
+        this.coinStreak = t - this.lastCoinAt < MIX.coinStreakWindow ? Math.min(this.coinStreak + 1, MIX.coinStreakSteps) : 0;
+        this.lastCoinAt = t;
+        const scale = MUSIC.scale;
+        const semis = scale[this.coinStreak % scale.length]! + 12 * Math.floor(this.coinStreak / scale.length);
+        const f = 1046.5 * 2 ** (semis / 12);
+        this.bell(f, t, 0.16, 0.085);
+        this.bell(f * 1.5, t + 0.055, 0.22, 0.07, 0.2);
         break;
+      }
       case 'rare':
-        [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, t + i * 0.06, 0.14, 'triangle', 0.12));
+        [784, 988, 1175, 1568].forEach((f, i) => this.bell(f, t + i * 0.06, 0.24, 0.1, 0.4));
         break;
       case 'heart':
         [523, 659, 784].forEach((f, i) => this.tone(f, t + i * 0.08, 0.18, 'sine', 0.16));
         break;
       case 'bonus':
-        [659, 880].forEach((f, i) => this.tone(f, t + i * 0.09, 0.15, 'triangle', 0.1));
+        [659, 880].forEach((f, i) => this.bell(f, t + i * 0.09, 0.2, 0.09));
         break;
       case 'hit':
+        // Body thump + a short crack, so getting caught lands with weight.
         this.noise(t, 0.25, 0.5, 900);
         this.tone(220, t, 0.25, 'sawtooth', 0.12, 80);
+        this.tone(150, t, 0.22, 'sine', 0.3, 45);
+        this.burst(t, 0.04, 0.35, 1800, 0.8);
         break;
       case 'alert':
-        this.tone(880, t, 0.09, 'square', 0.1);
-        this.tone(1175, t + 0.11, 0.14, 'square', 0.1);
+        // Two-note whistle-like sting (triangle instead of a harsh square).
+        this.tone(880, t, 0.1, 'triangle', 0.16, 932);
+        this.tone(1175, t + 0.11, 0.18, 'triangle', 0.16, 1245);
+        this.burst(t, 0.05, 0.12, 3200, 2);
         break;
       case 'gameover':
         [523, 440, 349, 262].forEach((f, i) => this.tone(f, t + i * 0.18, 0.3, 'triangle', 0.14));
         break;
       case 'click':
-        this.tone(660, t, 0.05, 'sine', 0.08);
+        // Soft wooden tick with a hint of pitch.
+        this.burst(t, 0.03, 0.2, 2600, 1.5);
+        this.tone(740, t, 0.06, 'sine', 0.06, 520);
         break;
+      case 'step': {
+        if (t - this.lastStepAt < MIX.stepMinGap) break;
+        this.lastStepAt = t;
+        this.stepFlip = !this.stepFlip;
+        // Sandal on a hard floor: a dull tap, left and right feet slightly apart in pitch.
+        const f = (this.stepFlip ? 520 : 440) * (0.94 + Math.random() * 0.12);
+        this.burst(t, 0.06, MIX.stepGain * 2.4, f, 1.2);
+        this.tone(this.stepFlip ? 150 : 132, t, 0.05, 'sine', MIX.stepGain, 80);
+        break;
+      }
       case 'portal':
         // Rising shimmer: the time-travel whoosh.
         this.tone(220, t, 0.9, 'sawtooth', 0.05, 880);
@@ -155,7 +235,8 @@ export class Sfx {
         this.tone(600, t + 0.03, 0.25, 'triangle', 0.1, 300);
         break;
       case 'denied':
-        this.tone(180, t, 0.12, 'square', 0.05);
+        this.tone(196, t, 0.09, 'triangle', 0.12, 165);
+        this.tone(165, t + 0.1, 0.12, 'triangle', 0.12, 139);
         break;
       case 'bark':
         // Two short ruff-ruffs.
@@ -195,4 +276,23 @@ export class Sfx {
         break;
     }
   }
+}
+
+/** Stereo impulse response: noise that decays exponentially and gets darker as it fades. */
+function hallImpulse(ctx: AudioContext, seconds: number, decay: number): AudioBuffer {
+  const len = Math.floor(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let low = 0;
+    for (let i = 0; i < len; i++) {
+      const k = i / len;
+      const white = Math.random() * 2 - 1;
+      // One-pole low-pass that closes over time: late echoes lose their highs, like a real room.
+      const a = 0.55 - 0.45 * k;
+      low += a * (white - low);
+      d[i] = low * (1 - k) ** decay;
+    }
+  }
+  return buf;
 }
